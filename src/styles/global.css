@@ -1,0 +1,142 @@
+/* ═══════════════════════════════════════════════════════════════
+   Toygun GCS — Küresel Stiller
+   Renk Paleti: #FF8000 (turuncu), #0ea5e9 (cyan), krem-beyaz tema
+   ═══════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* ── Ana Renkler ── */
+  --tg-turuncu:     #FF8000;
+  --tg-cyan:        #0ea5e9;
+  --tg-beyaz:       #FFFFFF;
+  --tg-siyah:       #000000;
+  --tg-arka-plan:   #f4f0e8;
+  --tg-arka-plan-2: #ece8dc;
+  --tg-tehlike:     #dc2626;
+  --tg-basari:      #16a34a;
+  --tg-uyari:       #d97706;
+
+  /* ── Panel / Cam Efekti ── */
+  --tg-cam-bg:       rgba(255, 251, 242, 0.88);
+  --tg-cam-border:   rgba(0, 0, 0, 0.09);
+  --tg-cam-blur:     16px;
+  --tg-panel-bg:     rgba(255, 251, 242, 0.97);
+  --tg-panel-border: rgba(0, 0, 0, 0.09);
+
+  /* ── Etkileşim Token'ları (açık tema) ── */
+  --tg-hover-bg:     rgba(0, 0, 0, 0.045);
+  --tg-hover-bg-2:   rgba(0, 0, 0, 0.075);
+  --tg-input-bg:     rgba(0, 0, 0, 0.05);
+  --tg-input-border: rgba(0, 0, 0, 0.13);
+  --tg-divider:      rgba(0, 0, 0, 0.08);
+  --tg-badge-bg:     rgba(0, 0, 0, 0.06);
+  --tg-subtle-bg:    rgba(0, 0, 0, 0.03);
+  --tg-select-bg:    #f0ece4;
+
+  /* ── Metin ── */
+  --tg-metin:           #2a1c08;
+  --tg-metin-soluk:     rgba(42, 28, 8, 0.58);
+  --tg-metin-cok-soluk: rgba(42, 28, 8, 0.33);
+
+  /* ── Boyutlar ── */
+  --tg-ust-bar-yukseklik: 48px;
+  --tg-alt-bar-yukseklik: 36px;
+  --tg-kenar-bosluk:      12px;
+  --tg-yuvarlatma:        10px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  color: var(--tg-metin);
+  background: linear-gradient(135deg, var(--tg-arka-plan), var(--tg-arka-plan-2));
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { width: 100%; height: 100%; }
+
+/* ═══ Cam Efekti ═══ */
+.cam-panel {
+  background: var(--tg-cam-bg);
+  backdrop-filter: blur(var(--tg-cam-blur));
+  -webkit-backdrop-filter: blur(var(--tg-cam-blur));
+  border: 1px solid var(--tg-cam-border);
+  border-radius: var(--tg-yuvarlatma);
+}
+
+.cam-panel-koyu {
+  background: var(--tg-panel-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--tg-panel-border);
+  border-radius: var(--tg-yuvarlatma);
+}
+
+/* ═══ Buton Stili ═══ */
+.tg-buton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--tg-beyaz);
+}
+
+.tg-buton:hover  { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.tg-buton:active { transform: translateY(0); }
+.tg-buton:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.tg-buton-turuncu { background: var(--tg-turuncu); }
+.tg-buton-turuncu:hover:not(:disabled) { background: #e67300; }
+
+.tg-buton-cyan   { background: var(--tg-cyan); }
+.tg-buton-cyan:hover:not(:disabled) { background: #0284c7; }
+
+.tg-buton-tehlike { background: var(--tg-tehlike); }
+.tg-buton-tehlike:hover:not(:disabled) { background: #b91c1c; }
+
+.tg-buton-cam {
+  background: var(--tg-input-bg);
+  border: 1px solid var(--tg-input-border);
+  color: var(--tg-metin);
+}
+.tg-buton-cam:hover:not(:disabled) { background: var(--tg-hover-bg-2); }
+
+/* ═══ Scrollbar ═══ */
+::-webkit-scrollbar            { width: 6px; height: 6px; }
+::-webkit-scrollbar-track      { background: transparent; }
+::-webkit-scrollbar-thumb      { background: rgba(0,0,0,0.18); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover{ background: rgba(0,0,0,0.28); }
+
+/* ═══ Geçiş Animasyonu ═══ */
+.sayfa-gecis-enter-active, .sayfa-gecis-leave-active { transition: opacity 0.2s ease; }
+.sayfa-gecis-enter-from, .sayfa-gecis-leave-to       { opacity: 0; }
+
+/* ═══ Leaflet Açık Tema ═══ */
+.leaflet-container { background: #0d1117 !important; }
+
+.leaflet-control-zoom a {
+  background: rgba(255, 251, 242, 0.95) !important;
+  color: #2a1c08 !important;
+  border-color: rgba(0,0,0,0.12) !important;
+}
+.leaflet-control-zoom a:hover { background: rgba(255, 251, 242, 1) !important; }
+
+.leaflet-control-attribution {
+  background: rgba(255, 251, 242, 0.75) !important;
+  color: rgba(42, 28, 8, 0.5) !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a { color: var(--tg-turuncu) !important; }

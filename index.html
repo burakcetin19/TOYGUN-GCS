@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="application-name" content="Toygun GCS" />
+  <meta name="description" content="Toygun — PX4 sabit kanatlı araçlar için yer kontrol istasyonu" />
+  <title>Toygun GCS</title>
+  <link rel="icon" type="image/png" href="/toygun-logo.png" />
+  <style>
+    body { margin: 0; background: #0a0a0a; }
+    #app-loader {
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh; background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
+    }
+    #app-loader img { width: 120px; opacity: 0.8; animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app-loader">
+    <img src="/toygun-logo.png" alt="Toygun GCS" />
+  </div>
+  <div id="app"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
