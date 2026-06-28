@@ -155,6 +155,22 @@ const MAVLINK_V1_STX = 0xFE
 const MAVLINK_V2_STX = 0xFD
 const MAV_ARMED_BAYRAGI = 128
 
+// HEARTBEAT içinde otopilot olmayan (yer kontrol istasyonu vb.) kaynakları ayıklamak için
+const MAV_AUTOPILOT_INVALID = 8   // QGC gibi GCS'ler bu değeri gönderir
+const MAV_TYPE_GCS = 6
+
+// MAVLink CRC_EXTRA tablosu — yalnızca decode ettiğimiz 6 mesaj için.
+// Çerçeve CRC doğrulaması bu değerler olmadan yapılamaz; bozuk/desenkron
+// çerçevelerin (rastgele base_mode ile sahte HEARTBEAT) elenmesini sağlar.
+const CRC_EXTRA: Record<number, number> = {
+  0: 50,    // HEARTBEAT
+  1: 124,   // SYS_STATUS
+  24: 24,   // GPS_RAW_INT
+  30: 39,   // ATTITUDE
+  33: 104,  // GLOBAL_POSITION_INT
+  74: 20,   // VFR_HUD
+}
+
 function px4ModuCoz(customMode: number): string {
   const anaMode = (customMode >> 16) & 0xFF
   const altMode = (customMode >> 24) & 0xFF
@@ -234,7 +250,13 @@ class MavlinkAyrıştırıcı {
         const toplam = 6 + govdeBoys + 2
         if (this.tampon.length < toplam) return
         const mesajId = this.tampon[5]
-        const govde = this.tampon.slice(6, 6 + govdeBoys)
+        const crcOfs = 6 + govdeBoys
+        if (!this.cerceveCrcGecerli(mesajId, crcOfs)) {
+          // Geçersiz/desenkron çerçeve — 1 bayt kaydır ve yeniden senkronize ol
+          this.tampon = this.tampon.slice(1)
+          continue
+        }
+        const govde = this.tampon.slice(6, crcOfs)
         this.tampon = this.tampon.slice(toplam)
         this.mesajCoz(mesajId, govde)
       } else {
@@ -245,11 +267,30 @@ class MavlinkAyrıştırıcı {
         const toplam = 10 + govdeBoys + 2 + imzaBoyu
         if (this.tampon.length < toplam) return
         const mesajId = this.tampon[7] | (this.tampon[8] << 8) | (this.tampon[9] << 16)
-        const govde = this.tampon.slice(10, 10 + govdeBoys)
+        const crcOfs = 10 + govdeBoys
+        if (!this.cerceveCrcGecerli(mesajId, crcOfs)) {
+          this.tampon = this.tampon.slice(1)
+          continue
+        }
+        const govde = this.tampon.slice(10, crcOfs)
         this.tampon = this.tampon.slice(toplam)
         this.mesajCoz(mesajId, govde)
       }
     }
+  }
+
+  /**
+   * Çerçevenin X.25 CRC'sini doğrular (yalnızca CRC_EXTRA bilinen mesajlar için).
+   * CRC, STX'ten sonraki tüm başlık + payload baytları üzerine crc_extra eklenerek
+   * hesaplanır. Bilinmeyen mesajlar doğrulanamaz; uzunluk alanına güvenilir.
+   */
+  private cerceveCrcGecerli(mesajId: number, crcOfs: number): boolean {
+    const crcExtra = CRC_EXTRA[mesajId]
+    if (crcExtra === undefined) return true
+    const crcGirdi = Buffer.concat([this.tampon.slice(1, crcOfs), Buffer.from([crcExtra])])
+    const hesaplanan = x25Crc(crcGirdi)
+    const beklenen = this.tampon[crcOfs] | (this.tampon[crcOfs + 1] << 8)
+    return hesaplanan === beklenen
   }
 
   private mesajCoz(mesajId: number, govde: Buffer): void {
@@ -270,6 +311,12 @@ class MavlinkAyrıştırıcı {
   // HEARTBEAT: custom_mode(u32), type(u8), autopilot(u8), base_mode(u8), system_status(u8), mavlink_version(u8)
   private heartbeatCoz(g: Buffer): void {
     if (g.length < 9) return
+    const aracTipi = g[4]
+    const otopilot = g[5]
+    // QGC gibi yer kontrol istasyonlarının HEARTBEAT'ini yok say.
+    // mavlink-router tüm trafiği yansıttığı için bunlar da gelir ve
+    // base_mode=0 ile armed durumunu yanlışlıkla sıfırlayıp salınıma yol açar.
+    if (otopilot === MAV_AUTOPILOT_INVALID || aracTipi === MAV_TYPE_GCS) return
     const customMode = g.readUInt32LE(0)
     const baseMode = g[6]
     this.onMesaj('HEARTBEAT', {

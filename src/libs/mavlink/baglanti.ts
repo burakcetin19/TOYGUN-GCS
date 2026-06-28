@@ -249,6 +249,9 @@ function mesajTipiCikar(veri: any): string | null {
 }
 
 function heartbeatIsle(msg: MavlinkHeartbeat, store: ReturnType<typeof useAracStore>): void {
+  // QGC gibi yer kontrol istasyonlarının HEARTBEAT'ini yok say — armed/mod
+  // durumu yalnızca otopilottan alınır (mavlink-router GCS heartbeat'lerini de yansıtır).
+  if (msg.autopilot?.type === 'MAV_AUTOPILOT_INVALID' || msg.type?.type === 'MAV_TYPE_GCS') return
   store.armed = (msg.base_mode?.bits & MAV_MODE_FLAG_SAFETY_ARMED) !== 0
   store.ucusModu = px4ModuCoz(msg.custom_mode)
 }
