@@ -502,13 +502,21 @@ export function donanımBaglantiKur(pencere: BrowserWindow): void {
   })
 
   // ── UDP Bağlantı ────────────────────────────────────────────────────────────
+  // UDP connectionless: socket.bind() yalnızca yerel port açar, araca bağlanmaz.
+  // 'baglandi' sinyali soket açılınca değil, ilk HEARTBEAT gelince gönderilir.
   ipcMain.handle('udp-baglan', async (_e, yerelPort: number) => {
     try {
       aktifBaglantiyiKes()
       baglantiDurumuGonder('baglaniliyor')
 
+      let heartbeatAlindi = false
       const ayrıştırıcı = new MavlinkAyrıştırıcı((tip, veri) => {
         pencereGonder('mavlink-mesaj', { tip, veri })
+        if (!heartbeatAlindi && tip === 'HEARTBEAT') {
+          heartbeatAlindi = true
+          baglantiDurumuGonder('baglandi')
+          console.log('[UDP] İlk HEARTBEAT alındı — bağlantı onaylandı')
+        }
       })
 
       aktifUdpSocket = dgram.createSocket('udp4')
@@ -523,8 +531,8 @@ export function donanımBaglantiKur(pencere: BrowserWindow): void {
 
       return await new Promise<{ basarili: boolean; hata?: string }>((coz) => {
         aktifUdpSocket!.once('listening', () => {
-          baglantiDurumuGonder('baglandi')
-          console.log(`[UDP] Dinleniyor: port ${yerelPort}`)
+          // Port açıldı — sadece 'baglaniliyor' durumunda kal, araç bağlanmadı
+          console.log(`[UDP] Port ${yerelPort} dinlemede — HEARTBEAT bekleniyor`)
           coz({ basarili: true })
         })
         aktifUdpSocket!.once('error', (hata: Error) => {

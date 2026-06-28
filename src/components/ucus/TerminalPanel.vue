@@ -56,20 +56,6 @@ const ekle = (metin: string, tip: TermMesaj['tip'] = 'info') => {
 const temizle = () => { mesajlar.value = [] }
 const duraksatToggle = () => { durakli.value = !durakli.value }
 
-/* Demo başlangıç mesajları */
-const demoMesajlar: Array<[string, TermMesaj['tip']]> = [
-  ['Toygun GCS başlatıldı', 'sys'],
-  ['Sistem bileşenleri yükleniyor...', 'info'],
-  ['Harita katmanı hazır', 'ok'],
-  ['MAVLink servis dinlemede', 'info'],
-  ['Telemetri modülü aktif', 'ok'],
-  ['Hava savunma katmanı yüklendi', 'sys'],
-  ['Uçuş sınır poligonu tanımlandı', 'info'],
-  ['Bağlantı bekleniyor...', 'warn'],
-]
-
-let demoZamanlayici: ReturnType<typeof setInterval>
-
 /* Log scroll */
 watch(mesajlar, async () => {
   await nextTick()
@@ -80,30 +66,12 @@ watch(mesajlar, async () => {
 const globalLog = (metin: string, tip: TermMesaj['tip'] = 'info') => ekle(metin, tip)
 
 onMounted(() => {
-  /* Demo mesajları sırayla göster */
-  demoMesajlar.forEach(([metin, tip], i) => {
-    setTimeout(() => ekle(metin, tip), i * 280)
-  })
-
-  /* Global hook'u kaydet */
+  ekle('Toygun GCS başlatıldı', 'sys')
+  ekle('Bağlantı bekleniyor...', 'warn')
   ;(window as any).__toygunTerminal = globalLog
-
-  /* Periyodik durum mesajları (simülasyon) */
-  demoZamanlayici = setInterval(() => {
-    const secilenler: Array<[string, TermMesaj['tip']]> = [
-      ['Kalp atışı: sistem sağlıklı', 'sys'],
-      ['GPS fix korunuyor — 12 uydu', 'info'],
-      ['Telemetri gecikmesi: 8 ms', 'ok'],
-      ['Batarya: 87% — nominal', 'ok'],
-      ['Rüzgar tahmini: 3.2 m/s KD', 'info'],
-    ]
-    const r = secilenler[Math.floor(Math.random() * secilenler.length)]
-    ekle(r[0], r[1])
-  }, 7000)
 })
 
 onUnmounted(() => {
-  clearInterval(demoZamanlayici)
   delete (window as any).__toygunTerminal
 })
 </script>

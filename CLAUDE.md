@@ -22,11 +22,13 @@ PX4 tabanlı sabit kanatlı insansız hava araçları için geliştirilmiş öze
 npm run dev              # Web — tarayıcı geliştirme modu (http://localhost:5173)
 npm run dev:electron     # Electron — masaüstü geliştirme modu
 npm run build            # Electron için üretim build'i
-npm run dist:win         # Windows .exe üretimi (build + paket)
+npm run dist:win         # Windows klasör çıktısı (build + electron-packager)
+npm run dist:win:installer  # Windows NSIS kurulum dosyası (electron-builder)
 npm run typecheck        # TypeScript tip kontrolü
 ```
 
 > `node_modules` mevcut, tekrar `npm install` gerekmez. Node.js kurulu olmalı.
+> Linting yapılandırması (ESLint vb.) mevcut değil — tip kontrolü için yalnızca `typecheck` kullanılır.
 
 ## Dosya Yapısı
 ```
@@ -204,6 +206,32 @@ Renk paleti (`src/styles/global.css`, `--tg-*` prefix):
 ```
 
 `.cam-panel-koyu` → glassmorphism panel stili (backdrop-blur + şeffaf arka plan).
+
+## Yarışma Sunucusu (`src/stores/sunucu.ts`)
+
+Yarışma sırasında rakip konumları ve HSS (Hava Savunma Sistemi) bölgelerini yönetir. `BaglantilarPaneli.vue` üzerinden yapılandırılır.
+
+**Veri tipleri:** `Rakip` (id, takimNo, enlem, boylam, irtifa, baslik, hiz, ihaKilitlendi) · `HssZon` (id, enlem, boylam, yaricap) · `UcusSiniri` (noktalar[][])
+
+**REST API uç noktaları (1 sn polling):**
+| Endpoint | Veri |
+|---|---|
+| `POST /api/giris` | Kimlik doğrulama — `kullanici_adi`, `sifre`, `takim_numarasi` — token döner |
+| `GET /api/telemetri_gonder` | Rakip IHA konumları (kendi takımı filtrelenir) |
+| `GET /api/hss_koordinatlari` | HSS bölgeleri: `merkez_enlem`, `merkez_boylam`, `yaricap` |
+| `GET /api/ucus_alani` | Uçuş sınır poligonu (≥3 nokta) |
+| `GET /api/sunucu_saati` | Sunucu saat senkronizasyonu — `zamanFarkKritik` 500 ms üzerinde uyarır |
+
+Sunucu konumları `GorevHaritasi.vue` üzerinde rakip ve HSS katmanları olarak gösterilir.
+
+## Web Serial API (`src/libs/mavlink/web-serial-baglanti.ts`)
+
+`navigator.serial` üzerinden çalışan ikinci bir MAVLink bağlantı yolu. Electron'un `serialport` paketi yüklenemediğinde fallback olarak kullanılır; ayrıca Chrome/Edge web modunda da çalışır.
+
+- `webSerialDestekleniyor()` → `navigator.serial` varlığını kontrol eder
+- `webSerialBaglan(baud, vidHex?, pidHex?)` → daha önce izin verilmiş portlara otomatik bağlanır, yoksa `requestPort()` diyaloğu açar
+- Kendi içinde MAVLink v1/v2 ayrıştırıcısı (`WebSerialMavlinkParser`) ve 5 sn heartbeat watchdog içerir
+- `webSerialYaz(bytes)` → komut göndermek için (komutlar.ts ile birlikte kullanılır)
 
 ## Kodlama Kuralları
 - **Türkçe isimlendirme** her yerde — değişken, fonksiyon, component, store alanı

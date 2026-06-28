@@ -14,7 +14,7 @@
         <span class="mod-badge" :class="modBadgeClass">{{ aracStore.ucusModu }}</span>
       </div>
 
-      <div class="bilgi-satirlar">
+      <div v-if="aracStore.aracCevrimici" class="bilgi-satirlar">
         <!-- Hız -->
         <div class="bilgi-kart">
           <div class="bilgi-ikon-alan" style="color: var(--tg-cyan)">
@@ -64,6 +64,11 @@
         </div>
       </div>
 
+      <div v-else class="bilgi-baglanti-yok">
+        <v-icon size="20" color="var(--tg-metin-cok-soluk)">mdi-airplane-off</v-icon>
+        <span>Araç bağlı değil</span>
+      </div>
+
       <!-- ARM durumu -->
       <div class="arm-satir">
         <div class="arm-led" :class="aracStore.armed ? 'arm-led-aktif' : 'arm-led-pasif'" />
@@ -78,8 +83,8 @@
       </button>
     </div>
 
-    <!-- Sağ üst: HUD + Pusula -->
-    <div class="hud-overlay">
+    <!-- Sağ üst: HUD + Pusula — yalnızca bağlı/simülasyon -->
+    <div v-if="aracStore.aracCevrimici" class="hud-overlay">
       <HudGorunumu />
       <PusulaCihazi />
     </div>
@@ -207,6 +212,17 @@ watch(kilitliMode, (v) => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.bilgi-baglanti-yok {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 8px;
+  color: var(--tg-metin-cok-soluk);
+  font-size: 11px;
 }
 
 .bilgi-kart {

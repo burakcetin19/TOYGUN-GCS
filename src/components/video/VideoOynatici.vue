@@ -26,10 +26,71 @@
       </div>
     </div>
 
+    <!-- ROS2 topic satırı -->
+    <div class="video-ros2-satir">
+      <v-icon size="13" color="var(--tg-cyan)" class="mr-1">mdi-robot-industrial</v-icon>
+      <input
+        v-model="ros2Topic"
+        type="text"
+        class="video-url-giris"
+        placeholder="/camera/image_raw/compressed"
+      />
+      <span v-if="ros2Aktif" class="ros2-fps">{{ ros2Fps }} fps</span>
+      <button
+        class="tg-buton video-btn"
+        :class="ros2Aktif ? 'ros2-btn-aktif' : 'tg-buton-cam'"
+        @click="ros2BaslaBirak"
+      >
+        <v-icon size="14">{{ ros2Aktif ? 'mdi-stop' : 'mdi-broadcast' }}</v-icon>
+        <span>{{ ros2Aktif ? 'Durdur' : 'ROS2' }}</span>
+      </button>
+    </div>
+
+    <!-- GStreamer hızlı bağlantı satırı -->
+    <div class="video-gst-satir">
+      <v-icon size="13" color="var(--tg-turuncu)" class="mr-1">mdi-video-wireless</v-icon>
+      <span class="gst-etiket">GStreamer</span>
+      <input
+        v-model="gstIp"
+        type="text"
+        class="video-url-giris gst-ip-giris"
+        placeholder="192.168.1.100"
+      />
+      <span class="gst-ayirac">:</span>
+      <input
+        v-model="gstPort"
+        type="text"
+        class="video-url-giris gst-port-giris"
+        placeholder="8080"
+      />
+      <button
+        class="tg-buton video-btn tg-buton-cam gst-btn"
+        title="MJPEG akışına bağlan (http://{ip}:{port})"
+        @click="gstMjpegBaglan"
+      >
+        <v-icon size="14">mdi-play-network</v-icon>
+        <span>MJPEG</span>
+      </button>
+      <button
+        class="tg-buton video-btn tg-buton-cam gst-btn"
+        title="go2rtc WebRTC akışına bağlan (http://{ip}:1984/api/whep?src=camera)"
+        @click="gstWebrtcBaglan"
+      >
+        <v-icon size="14">mdi-broadcast</v-icon>
+        <span>WebRTC</span>
+      </button>
+    </div>
+
     <div class="video-alan">
-      <!-- WebRTC / HTTP akışı -->
+      <!-- ROS2 topic canvas akışı -->
+      <canvas v-if="ros2Aktif" ref="canvasRef" class="video-eleman" />
+
+      <!-- HTTP MJPEG akışı (<img> ile — multipart/x-mixed-replace) -->
+      <img v-else-if="mjpegAktif" :src="videoUrl" class="video-eleman" @error="mjpegHata" />
+
+      <!-- WebRTC akışı -->
       <video
-        v-if="aktif"
+        v-else-if="aktif"
         ref="videoRef"
         autoplay
         muted
@@ -45,7 +106,7 @@
       </div>
 
       <!-- Telemetri overlay -->
-      <div v-if="aktif && overlayGoster" class="video-overlay">
+      <div v-if="(aktif || mjpegAktif || ros2Aktif) && overlayGoster" class="video-overlay">
         <div class="overlay-sol">
           <span>{{ aracStore.yerHizi.toFixed(1) }} m/s</span>
           <span>{{ aracStore.yukseklik.toFixed(0) }} m</span>
@@ -65,14 +126,95 @@
 <script setup lang="ts">
 import { ref, nextTick, onUnmounted } from 'vue'
 import { useAracStore } from '@/stores/arac'
+import { topicAboneOl, topicAbonelikIptal, rosbridgeDurumu } from '@/libs/ros2/rosbridge-baglanti'
 
 const aracStore = useAracStore()
-const videoRef = ref<HTMLVideoElement>()
-const videoUrl = ref('')
-const aktif = ref(false)
+const videoRef  = ref<HTMLVideoElement>()
+const canvasRef = ref<HTMLCanvasElement>()
+const videoUrl  = ref('')
+const aktif      = ref(false)
+const mjpegAktif = ref(false)
 const overlayGoster = ref(true)
-const webcamAktif = ref(false)
+const webcamAktif   = ref(false)
 let webcamStream: MediaStream | null = null
+
+// ── GStreamer hızlı bağlantı ───────────────────────────────────────────────────
+const gstIp   = ref('192.168.1.100')
+const gstPort = ref('8080')
+
+const gstMjpegBaglan = () => {
+  const ip   = gstIp.value.trim()
+  const port = gstPort.value.trim() || '8080'
+  if (!ip) { (window as any).__toygunBildirim?.('IP adresi giriniz', 'uyari'); return }
+  videoUrl.value = `http://${ip}:${port}`
+  aktif.value = false
+  ros2Aktif.value = false
+  mjpegAktif.value = true
+  ;(window as any).__toygunTerminal?.(`GStreamer MJPEG: http://${ip}:${port}`, 'ok')
+  ;(window as any).__toygunBildirim?.('GStreamer MJPEG akışı başlatıldı', 'basari')
+}
+
+const gstWebrtcBaglan = async () => {
+  const ip = gstIp.value.trim()
+  if (!ip) { (window as any).__toygunBildirim?.('IP adresi giriniz', 'uyari'); return }
+  videoUrl.value = `http://${ip}:1984/api/whep?src=camera`
+  ros2Aktif.value = false
+  mjpegAktif.value = false
+  await akisiBaslat()
+}
+
+// ── ROS2 kamera topic ──────────────────────────────────────────────────────────
+const ros2Topic = ref('/camera/image_raw/compressed')
+const ros2Aktif = ref(false)
+const ros2Fps   = ref(0)
+let frameCount  = 0
+let fpsInterval: ReturnType<typeof setInterval> | null = null
+
+const ros2BaslaBirak = () => {
+  const bildirim = (window as any).__toygunBildirim
+
+  if (ros2Aktif.value) {
+    topicAbonelikIptal(ros2Topic.value)
+    ros2Aktif.value = false
+    if (fpsInterval) { clearInterval(fpsInterval); fpsInterval = null }
+    ros2Fps.value = 0
+    ;(window as any).__toygunTerminal?.('ROS2 kamera akışı durduruldu', 'warn')
+    return
+  }
+
+  if (rosbridgeDurumu.value !== 'baglandi') {
+    bildirim?.('ROS2 bağlı değil — önce Ayarlar\'dan ROS2 bağlantısı kurun', 'uyari')
+    return
+  }
+
+  ros2Aktif.value = true
+  aktif.value = false   // video elementini gizle, canvas göster
+  frameCount = 0
+  ros2Fps.value = 0
+
+  fpsInterval = setInterval(() => {
+    ros2Fps.value = frameCount
+    frameCount = 0
+  }, 1000)
+
+  topicAboneOl(ros2Topic.value, 'sensor_msgs/msg/CompressedImage', (msg: any) => {
+    frameCount++
+    const canvas = canvasRef.value
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const img = new Image()
+    img.onload = () => {
+      if (canvas.width !== img.width)  canvas.width  = img.width
+      if (canvas.height !== img.height) canvas.height = img.height
+      ctx.drawImage(img, 0, 0)
+    }
+    img.src = `data:image/${msg.format ?? 'jpeg'};base64,${msg.data}`
+  })
+
+  ;(window as any).__toygunTerminal?.(`ROS2 kamera: ${ros2Topic.value}`, 'ok')
+  bildirim?.('ROS2 kamera akışı başlatıldı', 'basari')
+}
 
 const webcamBaslat = async () => {
   const bildirimFn = (window as any).__toygunBildirim
@@ -88,6 +230,7 @@ const webcamBaslat = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     webcamStream = stream
     webcamAktif.value = true
+    mjpegAktif.value = false
     aktif.value = true
     await nextTick()
     if (videoRef.value) {
@@ -108,26 +251,26 @@ const webcamBaslat = async () => {
 
 onUnmounted(() => {
   webcamStream?.getTracks().forEach(t => t.stop())
+  if (ros2Aktif.value) topicAbonelikIptal(ros2Topic.value)
+  if (fpsInterval) clearInterval(fpsInterval)
 })
+
+const mjpegHata = () => {
+  ;(window as any).__toygunBildirim?.('MJPEG akışına bağlanılamadı — URL ve sunucu doğru mu?', 'hata')
+  mjpegAktif.value = false
+}
 
 const akisiBaslat = async () => {
   if (!videoUrl.value) return
 
   const bildirim = (window as any).__toygunBildirim
 
-  // HTTP/HLS akışı desteği
+  // HTTP → <img> ile MJPEG multipart stream (video elementi çalışmaz)
   if (videoUrl.value.startsWith('http')) {
-    aktif.value = true
-    setTimeout(() => {
-      if (videoRef.value) {
-        videoRef.value.src = videoUrl.value
-        videoRef.value.play().catch(() => {
-          bildirim?.('Video akışı başlatılamadı', 'hata')
-          aktif.value = false
-        })
-      }
-    }, 100)
-    bildirim?.('Video akışı başlatılıyor...', 'bilgi')
+    aktif.value = false
+    mjpegAktif.value = true
+    bildirim?.('MJPEG akışı başlatıldı', 'basari')
+    ;(window as any).__toygunTerminal?.(`Video: ${videoUrl.value}`, 'ok')
     return
   }
 
@@ -231,6 +374,71 @@ const akisiBaslat = async () => {
   background: rgba(220, 38, 38, 0.1) !important;
   border: 1px solid rgba(220, 38, 38, 0.3) !important;
   color: var(--tg-tehlike) !important;
+}
+
+.video-ros2-satir {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px;
+  gap: 4px;
+  border-bottom: 1px solid var(--tg-divider);
+  background: rgba(71, 199, 252, 0.03);
+}
+
+.ros2-fps {
+  font-size: 10px;
+  color: var(--tg-cyan);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 42px;
+}
+
+.ros2-btn-aktif {
+  background: rgba(220, 38, 38, 0.1) !important;
+  border: 1px solid rgba(220, 38, 38, 0.3) !important;
+  color: var(--tg-tehlike) !important;
+}
+
+.video-gst-satir {
+  display: flex;
+  align-items: center;
+  padding: 5px 12px;
+  gap: 4px;
+  border-bottom: 1px solid var(--tg-divider);
+  background: rgba(255, 128, 0, 0.03);
+}
+
+.gst-etiket {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--tg-turuncu);
+  white-space: nowrap;
+  margin-right: 2px;
+}
+
+.gst-ip-giris {
+  width: 130px !important;
+}
+
+.gst-port-giris {
+  width: 50px !important;
+}
+
+.gst-ayirac {
+  font-size: 13px;
+  color: var(--tg-metin-soluk);
+  line-height: 1;
+}
+
+.gst-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .video-alan {

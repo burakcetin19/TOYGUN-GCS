@@ -39,7 +39,6 @@ const haritaRef   = ref<HTMLElement>()
 
 let harita: L.Map | null = null
 let aracMarker: L.Marker | null = null
-let aracSurukleniyor = false
 let noktaMarkerlar: L.Marker[] = []
 let yolCizgisi: L.Polyline | null = null
 let evMarker: L.Marker | null = null
@@ -98,11 +97,8 @@ let hssKatman: L.LayerGroup | null = null
 let ucusSinirKatman: L.LayerGroup | null = null
 let rakipKatman: L.LayerGroup | null = null
 
-/* ── Uçuş sınırı köşe koordinatları (kullanıcı düzenleyebilir) ── */
-const sinirKoseleri = ref<L.LatLngTuple[]>([
-  [39.920, 32.840], [39.920, 32.890],
-  [39.955, 32.890], [39.955, 32.840],
-])
+/* ── Uçuş sınırı köşe koordinatları (sunucudan gelir) ── */
+const sinirKoseleri = ref<L.LatLngTuple[]>([])
 let sinirPolygon: L.Polygon | null = null
 let sinirKoseMarkerlar: L.Marker[] = []
 
@@ -183,23 +179,6 @@ const haritaOlustur = () => {
 
   tileDegistir('hibrit')
 
-  aracMarker = L.marker([39.9334, 32.8597], { icon: aracIkonu, draggable: true })
-    .addTo(harita)
-    .bindTooltip('Kendi Aracın — Sürükle', { direction: 'top', offset: [0, -14] })
-
-  aracMarker.on('dragstart', () => { aracSurukleniyor = true })
-  aracMarker.on('drag', () => {
-    const pos = aracMarker!.getLatLng()
-    aracStore.enlem = pos.lat
-    aracStore.boylam = pos.lng
-  })
-  aracMarker.on('dragend', () => {
-    const pos = aracMarker!.getLatLng()
-    aracStore.enlem = pos.lat
-    aracStore.boylam = pos.lng
-    aracSurukleniyor = false
-  })
-
   hssKatman       = L.layerGroup().addTo(harita)
   ucusSinirKatman = L.layerGroup().addTo(harita)
   rakipKatman     = L.layerGroup().addTo(harita)
@@ -234,11 +213,13 @@ const hssCiz = () => {
   })
 }
 
-/* ── Uçuş sınırı çizimi (sürüklenebilir köşeler) ── */
+/* ── Uçuş sınırı çizimi (sunucudan gelen köşeler) ── */
 const ucusSiniriCiz = () => {
   if (!harita || !ucusSinirKatman) return
   ucusSinirKatman.clearLayers()
   sinirKoseMarkerlar = []
+
+  if (sinirKoseleri.value.length < 3) return
 
   sinirPolygon = L.polygon(sinirKoseleri.value, {
     color: '#22c55e', weight: 2, opacity: 0.75,
@@ -327,6 +308,20 @@ const noktalarGuncelle = () => {
   }
 }
 
+/* ── Araç marker yönetimi (yalnızca bağlı/simülasyon) ── */
+const aracMarkerEkle = () => {
+  if (!harita || aracMarker) return
+  aracMarker = L.marker([aracStore.enlem, aracStore.boylam], { icon: aracIkonu })
+    .addTo(harita)
+    .bindTooltip('Kendi Aracın', { direction: 'top', offset: [0, -14] })
+}
+
+const aracMarkerKaldir = () => {
+  if (!harita || !aracMarker) return
+  harita.removeLayer(aracMarker)
+  aracMarker = null
+}
+
 /* ── Lifecycle ── */
 let aracGuncZamanlayici: ReturnType<typeof setInterval>
 
@@ -334,7 +329,7 @@ onMounted(() => {
   haritaOlustur()
 
   aracGuncZamanlayici = setInterval(() => {
-    if (aracMarker && aracStore.enlem !== 0 && !aracSurukleniyor) {
+    if (aracMarker) {
       aracMarker.setLatLng([aracStore.enlem, aracStore.boylam])
     }
     const kilitli = !!(window as any).__toygunKilit
@@ -353,6 +348,15 @@ onUnmounted(() => {
 
 watch(() => gorevStore.noktalar,  noktalarGuncelle, { deep: true })
 watch(() => gorevStore.evNoktasi, noktalarGuncelle, { deep: true })
+
+// Araç marker — yalnızca bağlı ve konum geldiğinde göster
+watch(() => aracStore.aracCevrimici, (cevrimici) => {
+  if (!cevrimici) { aracMarkerKaldir(); return }
+  if (aracStore.enlem !== 0) aracMarkerEkle()
+})
+watch(() => aracStore.enlem, (enlem) => {
+  if (aracStore.aracCevrimici && enlem !== 0 && !aracMarker) aracMarkerEkle()
+})
 
 // Sunucu verisi değiştiğinde haritayı güncelle
 watch(() => sunucuStore.hssZonelari, hssCiz, { deep: true })
