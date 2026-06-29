@@ -330,13 +330,12 @@ const sunucuBaglantiToggle = async () => {
       const sonuc = await sunucuStore.baglan()
       if (sonuc.basarili) {
         bildirim('Sunucu bağlantısı kuruldu', 'basari')
-        termLog(`Giriş başarılı — gecikme: ${sunucuStore.gecikme} ms`, 'ok')
       } else {
-        bildirim(`Sunucu hatası: ${sonuc.hata ?? 'Bilinmeyen hata'}`, 'hata')
-        termLog(`Sunucu bağlantı hatası: ${sonuc.hata ?? ''}`, 'error')
+        bildirim(`Sunucu bağlantısı başarısız`, 'hata')
       }
     } catch (e: any) {
       bildirim(`Bağlantı başarısız: ${e.message}`, 'hata')
+      termLog(`İstisna: ${e.message}`, 'error')
     } finally {
       sunucuBaglanIkonYukleniyor.value = false
     }

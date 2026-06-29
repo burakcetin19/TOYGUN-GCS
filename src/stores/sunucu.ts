@@ -86,6 +86,42 @@ export const useSunucuStore = defineStore('sunucu', () => {
     return fetch(url, { ...options, credentials: 'include' })
   }
 
+  function termLog(mesaj: string, tip: 'info' | 'ok' | 'warn' | 'error' | 'sys' = 'info') {
+    ;(window as any).__toygunTerminal?.(mesaj, tip)
+  }
+
+  function httpHataMesaji(status: number): string {
+    switch (status) {
+      case 204: return `Paket formatı yanlış (204) — istek gövdesi sunucu beklentisiyle uyuşmuyor`
+      case 400: return `Hatalı istek (400) — kullanıcı adı, şifre veya takım numarası hatalı`
+      case 401: return `Kimliksiz erişim (401) — oturum açmanız gerekiyor`
+      case 403: return `Yetkisiz erişim (403) — bu hesabın yetkisi yok`
+      case 404: return `Geçersiz URL (404) — sunucu adresi veya endpoint yanlış`
+      case 500: return `Sunucu iç hatası (500) — sunucu tarafında bir sorun var`
+      default:  return `HTTP ${status} hatası`
+    }
+  }
+
+  function agHataMesaji(hata: any): { kisa: string; ipucu: string } {
+    if (hata.name === 'TimeoutError' || hata.name === 'AbortError') {
+      return {
+        kisa:  'Zaman aşımı — sunucuya ulaşılamadı',
+        ipucu: '→ IP adresi veya port numarası doğru mu? Sunucu çalışıyor mu?',
+      }
+    }
+    const msg: string = hata.message ?? ''
+    if (msg.includes('Failed to fetch') || msg.includes('fetch')) {
+      return {
+        kisa:  'Bağlantı kurulamadı — sunucu erişilemiyor',
+        ipucu: '→ Sunucu açık mı? Ağ bağlantısı var mı? Güvenlik duvarı kapalı mı?',
+      }
+    }
+    return {
+      kisa:  msg || 'Bilinmeyen ağ hatası',
+      ipucu: '',
+    }
+  }
+
   function saatStringOlustur(s: SunucuSaatiObj): string {
     return [
       String(s.saat).padStart(2, '0'),
@@ -295,9 +331,15 @@ export const useSunucuStore = defineStore('sunucu', () => {
   async function baglan(): Promise<{ basarili: boolean; hata?: string }> {
     try {
       hataMesaji.value = null
+      const url = temelUrl()
+      termLog(`─── Sunucu bağlantısı başlatılıyor ───`, 'sys')
+      termLog(`Adres : ${url}`, 'info')
+      termLog(`Hesap : kullanıcı="${kullanici.value}", takım=${takimNo.value}`, 'info')
+      termLog(`POST  : ${url}/api/giris`, 'info')
+
       const t0 = Date.now()
 
-      const res = await fetchSesyon(`${temelUrl()}/api/giris`, {
+      const res = await fetchSesyon(`${url}/api/giris`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -311,26 +353,43 @@ export const useSunucuStore = defineStore('sunucu', () => {
       gecikme.value = Date.now() - t0
 
       if (!res.ok) {
-        const mesaj = (res.status === 400 || res.status === 401)
-          ? 'Kimlik bilgisi hatalı'
-          : `Sunucu hatası: ${res.status}`
-        hataMesaji.value = mesaj
-        return { basarili: false, hata: mesaj }
+        const aciklama = httpHataMesaji(res.status)
+        hataMesaji.value = aciklama
+        termLog(`HATA  : ${aciklama}`, 'error')
+        if (res.status === 400 || res.status === 401) {
+          termLog(`→ Kullanıcı adı, şifre ve takım numarasını kontrol edin`, 'warn')
+        } else if (res.status === 404) {
+          termLog(`→ Sunucu IP/port adresi doğru mu? (${url})`, 'warn')
+        }
+        return { basarili: false, hata: aciklama }
       }
+
+      termLog(`Giriş başarılı — gecikme: ${gecikme.value} ms`, 'ok')
 
       // Başarılı girişte sunucu takim_numarasi döner
       try {
         const json = await res.json()
         if (json?.takim_numarasi != null) {
           takimNo.value = Number(json.takim_numarasi)
+          termLog(`Takım numarası: ${takimNo.value}`, 'info')
         }
       } catch { /* gövde boşsa yoksay */ }
 
       bagliMi.value = true
+
+      termLog(`GET   : ${url}/api/sunucusaati`, 'info')
       await zamanSenkronla()
+      if (sunucuZamani.value) termLog(`Sunucu saati: ${sunucuZamani.value} (Δ${zamanFarki.value} ms)`, 'ok')
+
+      termLog(`POST  : ${url}/api/telemetri_gonder (ilk paket)`, 'info')
       await telemetriGonder()
+
+      termLog(`GET   : ${url}/api/hss_koordinatlari`, 'info')
       await hssGuncelle()
+      termLog(`HSS bölge sayısı: ${hssZonelari.value.length}`, 'ok')
+
       await ucusAlaniGuncelle()
+      termLog(`─── Bağlantı hazır — telemetri 1 Hz ───`, 'sys')
 
       // 1 Hz telemetri (PDF: en az 1 Hz, max 2 Hz)
       telemetriInterval = setInterval(telemetriGonder, 1000)
@@ -343,11 +402,11 @@ export const useSunucuStore = defineStore('sunucu', () => {
 
       return { basarili: true }
     } catch (hata: any) {
-      const mesaj = hata.name === 'TimeoutError'
-        ? 'Sunucuya ulaşılamıyor (zaman aşımı)'
-        : (hata.message ?? 'Bağlantı hatası')
-      hataMesaji.value = mesaj
-      return { basarili: false, hata: mesaj }
+      const { kisa, ipucu } = agHataMesaji(hata)
+      hataMesaji.value = kisa
+      termLog(`HATA  : ${kisa}`, 'error')
+      if (ipucu) termLog(ipucu, 'warn')
+      return { basarili: false, hata: kisa }
     }
   }
 
