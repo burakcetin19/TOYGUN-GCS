@@ -348,8 +348,8 @@ watch(kilitliMode, (v) => {
   bottom: calc(var(--tg-alt-bar-yukseklik) + 10px);
   left: 12px;
   z-index: 500;
-  width: 300px;
-  height: 160px;
+  width: 420px;
+  height: 240px;
   pointer-events: auto;
 }
 
