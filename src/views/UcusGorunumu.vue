@@ -384,6 +384,14 @@ watch(kilitliMode, (v) => {
 .terminal-sag-icerik {
   width: 380px;
   height: 290px;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-sag-icerik :deep(.terminal-panel) {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .terminal-sag-tab {
