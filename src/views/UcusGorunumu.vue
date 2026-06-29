@@ -89,9 +89,22 @@
       <PusulaCihazi />
     </div>
 
-    <!-- Sol alt: Terminal Paneli -->
-    <div class="terminal-overlay">
-      <TerminalPanel />
+    <!-- Sağ kenar: Terminal yan panel -->
+    <div class="terminal-sag-container">
+      <div class="terminal-sag-panel" :class="{ 'terminal-sag-panel-acik': terminalAcik }">
+        <div class="terminal-sag-icerik">
+          <TerminalPanel />
+        </div>
+      </div>
+      <button
+        class="terminal-sag-tab"
+        :class="{ 'terminal-sag-tab-aktif': terminalAcik }"
+        title="Terminal"
+        @click="terminalAcik = !terminalAcik"
+      >
+        <v-icon size="12">{{ terminalAcik ? 'mdi-chevron-right' : 'mdi-console-line' }}</v-icon>
+        <span class="terminal-tab-yazi">LOG</span>
+      </button>
     </div>
 
     <!-- Mod değişim bildirimi -->
@@ -126,6 +139,7 @@ const kilitliMode = ref(false)
 const modBildirimGoster = ref(false)
 const tehditUyarisi = ref(false)
 const sonMod = ref('')
+const terminalAcik = ref(false)
 
 const gpsRenk = computed(() => {
   if (aracStore.gpsSayisi >= 8) return 'var(--tg-basari)'
@@ -342,15 +356,74 @@ watch(kilitliMode, (v) => {
 }
 .hud-overlay > * { pointer-events: auto; }
 
-/* ── Sol alt: Terminal ── */
-.terminal-overlay {
+/* ── Sağ kenar: Terminal ── */
+.terminal-sag-container {
   position: absolute;
+  right: 0;
   bottom: calc(var(--tg-alt-bar-yukseklik) + 10px);
-  left: 12px;
   z-index: 500;
-  width: 420px;
-  height: 240px;
+  display: flex;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.terminal-sag-panel {
+  flex-shrink: 0;
+  width: 0;
+  height: 290px;
+  overflow: hidden;
+  transition: width 0.22s ease;
+  pointer-events: none;
+}
+
+.terminal-sag-panel-acik {
+  width: 380px;
   pointer-events: auto;
+}
+
+.terminal-sag-icerik {
+  width: 380px;
+  height: 290px;
+}
+
+.terminal-sag-tab {
+  flex-shrink: 0;
+  width: 22px;
+  height: 72px;
+  background: rgba(8, 10, 16, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: auto;
+  transition: all 0.15s;
+  backdrop-filter: blur(6px);
+}
+
+.terminal-sag-tab:hover {
+  background: rgba(20, 22, 32, 0.96);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.terminal-sag-tab-aktif {
+  background: rgba(255, 128, 0, 0.08) !important;
+  border-color: rgba(255, 128, 0, 0.25) !important;
+  color: var(--tg-turuncu) !important;
+}
+
+.terminal-tab-yazi {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  font-family: 'Inter', sans-serif;
 }
 
 /* ── Mod değişim bildirimi ── */
