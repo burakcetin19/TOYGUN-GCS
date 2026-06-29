@@ -110,6 +110,9 @@
         <span>HAVA SAVUNMA MENZILINDE!</span>
       </div>
     </transition>
+
+    <!-- Sağ orta: Hedef Araçlar paneli -->
+    <HedefAraclarPaneli />
   </div>
 </template>
 
@@ -119,6 +122,7 @@ import GorevHaritasi from '@/components/harita/GorevHaritasi.vue'
 import HudGorunumu from '@/components/hud/HudGorunumu.vue'
 import PusulaCihazi from '@/components/hud/PusulaCihazi.vue'
 import TerminalPanel from '@/components/ucus/TerminalPanel.vue'
+import HedefAraclarPaneli from '@/components/sunucu/HedefAraclarPaneli.vue'
 import { useAracStore } from '@/stores/arac'
 
 const aracStore = useAracStore()
