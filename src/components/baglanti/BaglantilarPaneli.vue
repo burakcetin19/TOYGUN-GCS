@@ -21,11 +21,11 @@
           <div class="bag-satirlar-2">
             <div class="bag-alan">
               <label class="bag-etiket">IP Adresi</label>
-              <input v-model="sunucuStore.ip" type="text" class="bag-giris" placeholder="127.0.0.1" :disabled="sunucuStore.bagliMi" />
+              <input v-model="sunucuStore.ip" type="text" class="bag-giris" placeholder="127.0.0.25" :disabled="sunucuStore.bagliMi" />
             </div>
             <div class="bag-alan">
               <label class="bag-etiket">Port</label>
-              <input v-model="sunucuStore.port" type="number" class="bag-giris" placeholder="8000" :disabled="sunucuStore.bagliMi" />
+              <input v-model="sunucuStore.port" type="number" class="bag-giris" placeholder="5000" :disabled="sunucuStore.bagliMi" />
             </div>
           </div>
 
@@ -283,6 +283,15 @@
         <v-icon size="40" color="var(--tg-tehlike)" class="mb-2">mdi-alert-octagon</v-icon>
         <h3>Kamikaze Modu Onayı</h3>
         <p>Bu komut geri alınamaz. Devam etmek istiyor musunuz?</p>
+        <div class="bag-alan" style="width:100%; text-align:left; margin-top:4px;">
+          <label class="bag-etiket">QR Metni</label>
+          <input
+            v-model="kamikazeQrMetni"
+            type="text"
+            class="bag-giris"
+            placeholder="teknofest2026"
+          />
+        </div>
         <div class="onay-butonlar">
           <button class="bag-buton bag-buton-cam" @click="kamikazeOnayGoster = false">İptal</button>
           <button class="bag-buton bag-buton-tehlike" @click="kamikazeBaslat">ONAYLA</button>
@@ -321,13 +330,12 @@ const sunucuBaglantiToggle = async () => {
       const sonuc = await sunucuStore.baglan()
       if (sonuc.basarili) {
         bildirim('Sunucu bağlantısı kuruldu', 'basari')
-        termLog(`Giriş başarılı — gecikme: ${sunucuStore.gecikme} ms`, 'ok')
       } else {
-        bildirim(`Sunucu hatası: ${sonuc.hata ?? 'Bilinmeyen hata'}`, 'hata')
-        termLog(`Sunucu bağlantı hatası: ${sonuc.hata ?? ''}`, 'error')
+        bildirim(`Sunucu bağlantısı başarısız`, 'hata')
       }
     } catch (e: any) {
       bildirim(`Bağlantı başarısız: ${e.message}`, 'hata')
+      termLog(`İstisna: ${e.message}`, 'error')
     } finally {
       sunucuBaglanIkonYukleniyor.value = false
     }
@@ -446,11 +454,34 @@ const simuleDurdur = () => {
 
 /* ── Kamikaze ── */
 const kamikazeOnayGoster = ref(false)
-const kamikazeOnayla = () => { kamikazeOnayGoster.value = true }
-const kamikazeBaslat = () => {
+const kamikazeQrMetni    = ref('')
+let kamikazeBaslangicZamani: Date | null = null
+
+const kamikazeOnayla = () => {
+  kamikazeBaslangicZamani = new Date()
+  kamikazeOnayGoster.value = true
+}
+
+const kamikazeBaslat = async () => {
   kamikazeOnayGoster.value = false
+  const bitis = new Date()
   bildirim('KAMİKAZE MODU AKTİF!', 'hata')
   termLog('Kamikaze komutu gönderildi!', 'error')
+
+  if (sunucuStore.bagliMi) {
+    const baslangic = kamikazeBaslangicZamani ?? bitis
+    const basarili = await sunucuStore.kamikazeBilgisiGonder(baslangic, bitis, kamikazeQrMetni.value)
+    if (basarili) {
+      bildirim('Kamikaze bilgisi sunucuya gönderildi', 'basari')
+      termLog(`Kamikaze bilgisi gönderildi — QR: "${kamikazeQrMetni.value}"`, 'ok')
+    } else {
+      bildirim('Kamikaze bilgisi gönderilemedi', 'uyari')
+      termLog('Kamikaze bilgisi sunucuya gönderilemedi', 'warn')
+    }
+  }
+
+  kamikazeQrMetni.value = ''
+  kamikazeBaslangicZamani = null
 }
 
 onMounted(async () => {
