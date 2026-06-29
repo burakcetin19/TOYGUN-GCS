@@ -64,11 +64,12 @@ export const useSunucuStore = defineStore('sunucu', () => {
   const hedefYukseklik = ref(0)
 
   // Sunucudan gelen veriler
-  const rakiplar    = ref<Rakip[]>([])
-  const hssZonelari = ref<HssZon[]>([])
-  const ucusSiniri  = ref<UcusSiniri | null>(null)
+  const rakiplar     = ref<Rakip[]>([])
+  const hssZonelari  = ref<HssZon[]>([])
+  const ucusSiniri   = ref<UcusSiniri | null>(null)
   const sunucuZamani = ref<string | null>(null)
-  const zamanFarki  = ref(0)   // ms
+  const zamanFarki   = ref(0)   // ms
+  const qrKoordinati = ref<{ enlem: number; boylam: number } | null>(null)
 
   const zamanFarkKritik = computed(() => Math.abs(zamanFarki.value) > 500)
 
@@ -321,7 +322,9 @@ export const useSunucuStore = defineStore('sunucu', () => {
       })
       if (!res.ok) return null
       const json = await res.json()
-      return { enlem: Number(json.qrEnlem), boylam: Number(json.qrBoylam) }
+      const konum = { enlem: Number(json.qrEnlem), boylam: Number(json.qrBoylam) }
+      qrKoordinati.value = konum
+      return konum
     } catch { return null }
   }
 
@@ -394,10 +397,11 @@ export const useSunucuStore = defineStore('sunucu', () => {
       // 1 Hz telemetri (PDF: en az 1 Hz, max 2 Hz)
       telemetriInterval = setInterval(telemetriGonder, 1000)
 
-      // HSS 3 saniyede bir güncellenir
+      // HSS + QR 3 saniyede bir güncellenir
       hssInterval = setInterval(() => {
         hssGuncelle()
         ucusAlaniGuncelle()
+        qrKoordinatiAl()
       }, 3000)
 
       return { basarili: true }
@@ -421,6 +425,7 @@ export const useSunucuStore = defineStore('sunucu', () => {
     ucusSiniri.value   = null
     sunucuZamani.value = null
     zamanFarki.value   = 0
+    qrKoordinati.value = null
   }
 
   return {
@@ -431,7 +436,7 @@ export const useSunucuStore = defineStore('sunucu', () => {
     // Durum
     bagliMi, gecikme, hataMesaji, sunucuZamani, zamanFarki, zamanFarkKritik,
     // Veriler
-    rakiplar, hssZonelari, ucusSiniri,
+    rakiplar, hssZonelari, ucusSiniri, qrKoordinati,
     // Metodlar
     baglan, kes, zamanSenkronla,
     kilitlenmeBilgisiGonder, kamikazeBilgisiGonder, qrKoordinatiAl,

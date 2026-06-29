@@ -43,6 +43,7 @@ let noktaMarkerlar: L.Marker[] = []
 let yolCizgisi: L.Polyline | null = null
 let evMarker: L.Marker | null = null
 let kilitlemeMarker: L.Marker | null = null
+let qrMarker: L.Marker | null = null
 
 /* ── Tile katmanları ── */
 const aktifTile = ref('hibrit')
@@ -166,6 +167,21 @@ const sinirKoseIkonu = () => L.divIcon({
   iconSize: [10, 10], iconAnchor: [5, 5], className: 'sinir-kose',
 })
 
+const qrIkonu = L.divIcon({
+  html: `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+    <div style="width:28px;height:28px;background:#facc15;border:2px solid rgba(0,0,0,0.6);
+      border-radius:6px;display:flex;align-items:center;justify-content:center;
+      box-shadow:0 0 10px rgba(250,204,21,0.7);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="#1a1a1a">
+        <path d="M3,3H10V10H3M11,3H18V10H11M3,11H10V18H3M11,13H13V11H11M13,11H15V13H13M11,13V15H13M13,15H11V18H13M13,15H15V18H15V15M15,13H18V15H15M15,18V18H18V15H16V18M5,5V8H8V5M12,5V8H15V5M5,12V15H8V12Z"/>
+      </svg>
+    </div>
+    <span style="background:rgba(250,204,21,0.9);color:#1a1a1a;font-size:7px;font-weight:700;
+      padding:1px 4px;border-radius:2px;white-space:nowrap;font-family:Inter,sans-serif;">QR</span>
+  </div>`,
+  iconSize: [52, 36], iconAnchor: [26, 14], className: 'qr-marker',
+})
+
 /* ── Harita oluşturma ── */
 const haritaOlustur = () => {
   if (!haritaRef.value) return
@@ -259,6 +275,23 @@ const rakipCiz = () => {
         { direction: 'top' },
       )
   })
+}
+
+/* ── QR koordinatı pin ── */
+const qrCiz = () => {
+  if (!harita) return
+  if (qrMarker) { harita.removeLayer(qrMarker); qrMarker = null }
+
+  const qr = sunucuStore.qrKoordinati
+  if (!qr || (qr.enlem === 0 && qr.boylam === 0)) return
+
+  qrMarker = L.marker([qr.enlem, qr.boylam], {
+    icon: qrIkonu, zIndexOffset: 500,
+  }).addTo(harita)
+    .bindTooltip(
+      `<b>QR Kodu Konumu</b><br>${qr.enlem.toFixed(6)}, ${qr.boylam.toFixed(6)}`,
+      { direction: 'top', offset: [0, -18] },
+    )
 }
 
 /* ── Kilitlenme retiküllü ── */
@@ -361,6 +394,7 @@ watch(() => aracStore.enlem, (enlem) => {
 // Sunucu verisi değiştiğinde haritayı güncelle
 watch(() => sunucuStore.hssZonelari, hssCiz, { deep: true })
 watch(() => sunucuStore.rakiplar, rakipCiz, { deep: true })
+watch(() => sunucuStore.qrKoordinati, qrCiz, { deep: true })
 
 // Sunucu uçuş sınırı geldiğinde polygon'u güncelle
 watch(() => sunucuStore.ucusSiniri, (sinir) => {
@@ -422,6 +456,7 @@ watch(() => sunucuStore.ucusSiniri, (sinir) => {
 :deep(.ev-marker),
 :deep(.rakip-marker),
 :deep(.kilit-marker),
+:deep(.qr-marker),
 :deep(.sinir-kose) {
   background: none !important;
   border: none !important;
