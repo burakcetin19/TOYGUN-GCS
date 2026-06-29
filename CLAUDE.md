@@ -27,7 +27,7 @@ npm run dist:win:installer  # Windows NSIS kurulum dosyası (electron-builder)
 npm run typecheck        # TypeScript tip kontrolü
 ```
 
-> `node_modules` mevcut, tekrar `npm install` gerekmez. Node.js kurulu olmalı.
+> `npm install` gerekebilir — uzak ortamda `node_modules` mevcut olmayabilir. Node.js kurulu olmalı.
 > Linting yapılandırması (ESLint vb.) mevcut değil — tip kontrolü için yalnızca `typecheck` kullanılır.
 
 ## Dosya Yapısı
@@ -209,20 +209,71 @@ Renk paleti (`src/styles/global.css`, `--tg-*` prefix):
 
 ## Yarışma Sunucusu (`src/stores/sunucu.ts`)
 
-Yarışma sırasında rakip konumları ve HSS (Hava Savunma Sistemi) bölgelerini yönetir. `BaglantilarPaneli.vue` üzerinden yapılandırılır.
+Yarışma sırasında kendi telemetrisini sunucuya gönderir, rakip konumları ve HSS bölgelerini alır. `BaglantilarPaneli.vue` üzerinden yapılandırılır. **SIHA Haberleşme Dokümanı 2026** ile uyumludur.
+
+**Varsayılan adres:** `http://127.0.0.25:5000`  
+**Auth:** Oturum çerezi (`credentials: 'include'`) — token tabanlı değil.
 
 **Veri tipleri:** `Rakip` (id, takimNo, enlem, boylam, irtifa, baslik, hiz, ihaKilitlendi) · `HssZon` (id, enlem, boylam, yaricap) · `UcusSiniri` (noktalar[][])
 
-**REST API uç noktaları (1 sn polling):**
-| Endpoint | Veri |
-|---|---|
-| `POST /api/giris` | Kimlik doğrulama — `kullanici_adi`, `sifre`, `takim_numarasi` — token döner |
-| `GET /api/telemetri_gonder` | Rakip IHA konumları (kendi takımı filtrelenir) |
-| `GET /api/hss_koordinatlari` | HSS bölgeleri: `merkez_enlem`, `merkez_boylam`, `yaricap` |
-| `GET /api/ucus_alani` | Uçuş sınır poligonu (≥3 nokta) |
-| `GET /api/sunucu_saati` | Sunucu saat senkronizasyonu — `zamanFarkKritik` 500 ms üzerinde uyarır |
+**REST API uç noktaları:**
+| Endpoint | Yöntem | Açıklama |
+|---|---|---|
+| `/api/giris` | POST | `{ kadi, sifre, takim_numarasi }` → 200 OK + takım no |
+| `/api/telemetri_gonder` | POST | Kendi telemetrisini gönder (1 Hz) → `{ sunucusaati, konumBilgileri[] }` |
+| `/api/sunucusaati` | GET | `{ gun, saat, dakika, saniye, milisaniye }` — `zamanFarkKritik` 500 ms üzeri uyarır |
+| `/api/hss_koordinatlari` | GET | `{ hss_koordinat_bilgileri: [{ id, hssEnlem, hssBoylam, hssYaricap }] }` |
+| `/api/kilitlenme_bilgisi` | POST | `{ kilitlenmeBitisZamani, otonom_kilitlenme }` — her başarılı kilitlenme sonrası |
+| `/api/kamikaze_bilgisi` | POST | `{ kamikazeBaslangicZamani, kamikazeBitisZamani, qrMetni }` |
+| `/api/qr_koordinati` | GET | `{ qrEnlem, qrBoylam }` — kamikaze hedef QR konumu |
+| `/api/ucus_alani` | GET | Uçuş sınır poligonu (opsiyonel, belgede yok) |
 
-Sunucu konumları `GorevHaritasi.vue` üzerinde rakip ve HSS katmanları olarak gösterilir.
+**Telemetri paketi alanları (POST /api/telemetri_gonder):**
+`takim_numarasi`, `iha_enlem`, `iha_boylam`, `iha_irtifa` (AGL), `iha_dikilme` (pitch), `iha_yonelme` (heading 0-360), `iha_yatis` (roll), `iha_hiz`, `iha_batarya`, `iha_otonom` (AUTO mod ise 1), `iha_kilitlenme`, `hedef_merkez_X/Y`, `hedef_genislik/yukseklik`, `gps_saati`
+
+**Polling döngüleri:** Telemetri 1 Hz (ayrı interval) · HSS + QR 3 sn (ayrı interval)
+
+**Store metodları:**
+```ts
+baglan()                                          // giris → zaman sync → telemetri → HSS → interval başlat
+kes()                                             // interval temizle, tüm veri sıfırla
+zamanSenkronla()                                  // /api/sunucusaati → sunucuZamani, zamanFarki
+kilitlenmeBilgisiGonder(otonom: boolean)          // POST /api/kilitlenme_bilgisi
+kamikazeBilgisiGonder(bas, bitis, qrMetni)        // POST /api/kamikaze_bilgisi
+qrKoordinatiAl()                                  // GET /api/qr_koordinati → qrKoordinati ref günceller
+```
+
+**Kilitlenme parametreleri (telemetri ile otomatik gönderilir):**
+`ihaKilitlenme`, `hedefMerkezX`, `hedefMerkezY`, `hedefGenislik`, `hedefYukseklik` ref'leri store'da tutulur.
+
+**baglan() terminal çıktısı:** Bağlantı denemesi sırasında her adım `window.__toygunTerminal` ile terminale yazılır. HTTP hata kodları Türkçe açıklama + düzeltme ipucuyla loglanır.
+
+**Harita katmanları:** Rakipler kırmızı baklava ikonu (T-{no}), HSS bölgeleri kırmızı kesik çemberler, QR koordinatı sarı QR pini olarak `GorevHaritasi.vue` üzerinde gösterilir. Tüm katmanlar store watch'ları ile otomatik güncellenir.
+
+## Terminal Paneli (`src/components/ucus/TerminalPanel.vue`)
+
+Sol altta 420×240 px overlay olarak gösterilir (`UcusGorunumu.vue` → `.terminal-overlay`).
+
+- **Font:** 12px monospace, yüksek kontrast
+- **Satır formatı:** `● HH:MM:SS mesaj` — `[TYPE]` etiketi yerine renkli nokta (`●`)
+- **Tip renkleri:** `ok`→yeşil · `warn`→turuncu · `error`→kırmızı + hafif arka plan · `sys`→gri italik · `mod`→mor
+- **LED göstergesi:** Başlıkta son mesaj tipine göre renk değişir; hata gelince yanıp söner
+- **Daralt/genişlet:** Başlığa tık veya `˅` butonuyla terminal sadece başlık çubuğuna iner
+- **Filtre butonu:** `⚠` tıklanınca yalnızca `error`+`warn` mesajlar gösterilir
+- **Yeni mesaj butonu:** Kullanıcı yukarı kaydırırken yeni mesaj gelirse turuncu `↓ yeni` butonu çıkar
+- **Kapasite:** 300 mesaj saklar, dolunca en eski 50 silinir
+
+**Global hook:** `window.__toygunTerminal(metin, tip)` — store dahil her yerden çağrılabilir.
+
+## BaglantilarPaneli (`src/components/baglanti/BaglantilarPaneli.vue`)
+
+Sunucu bağlantısı, USB/MAVLink, SITL, video ve simülasyon bölümlerini içerir.
+
+**Sunucu bağlantısı:** IP (`127.0.0.25`), Port (`5000`), Kullanıcı Adı (`kadi`), Şifre, Takım Numarası alanları.
+
+**Kamikaze bölümü:** "Kamikaze Onayla" butonu açılan diyalogda QR Metni giriş alanı vardır. Onay verilince:
+1. `sunucuStore.kamikazeBilgisiGonder(baslangicZamani, bitis, qrMetni)` çağrılır
+2. Sonuç terminale loglanır
 
 ## Web Serial API (`src/libs/mavlink/web-serial-baglanti.ts`)
 
