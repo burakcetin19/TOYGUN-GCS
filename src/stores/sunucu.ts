@@ -301,8 +301,9 @@ export const useSunucuStore = defineStore('sunucu', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          kadi:  kullanici.value,
-          sifre: sifre.value,
+          kadi:           kullanici.value,
+          sifre:          sifre.value,
+          takim_numarasi: takimNo.value,
         }),
         signal: AbortSignal.timeout(5000),
       })
