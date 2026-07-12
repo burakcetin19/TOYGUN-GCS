@@ -181,11 +181,14 @@ MAVLink ve ROS2 çakışmayan iki ayrı katman olarak birlikte çalışır:
 ### Özel Görev Modları (src/components/gorev/OzelModlar.vue)
 | Buton | ROS2 Servisi | Renk |
 |---|---|---|
-| Kamikaze Modu | `/toygun/kamikaze_modu` | `#FF8000` turuncu |
-| İt Dalaşı Modu | `/toygun/it_dalasi_modu` | `#47C7FC` cyan |
-| Acil İniş | `/toygun/acil_inis` (onay gerekli) | `#dc2626` kırmızı |
+| Kamikaze — BAŞLAT durumu | `/kamikaze/start_mission` | `#FF8000` turuncu |
+| Kamikaze — RESET durumu | `/kamikaze/reset` | `#dc2626` kırmızı (`.kamikaze-reset`) |
+| İt Dalaşı Modu | `/toygun/it_dalasi_modu` (placeholder, henüz gerçek node yok) | `#47C7FC` cyan |
+| Acil İniş | `/toygun/acil_inis` (placeholder, onay gerekli) | `#dc2626` kırmızı |
 
 ROS2 servisleri `std_srvs/Trigger` tipinde. `rosbridge-baglanti.ts` → rosbridge WebSocket zinciri.
+
+**Kamikaze toggle:** Buton iki durumlu — başlangıçta "KAMİKAZE BAŞLAT" gösterir. Tıklanınca `/kamikaze/start_mission` çağrılır (gerçek `kamikaze_fsm` düğümü, ayrı `~/yukio-seki` workspace'inde). Servis yanıtının `degerler.success === true` olması durumunda (FSM yalnızca kendi fazı `IDLE` iken kabul eder) buton "KAMİKAZE RESET"e döner; tekrar tıklanınca `/kamikaze/reset` çağrılır (FSM'de koşulsuz başarılı) ve buton "KAMİKAZE BAŞLAT"a geri döner. `degerler.message` alanındaki FSM'in insan-okur sebep metni bildirim/terminal loguna yansıtılır. Buton durumu yalnızca gerçek servis başarısında (`yanit.basarili && degerler.success`) değişir — bağlantı kopukluğu/zaman aşımı/red durumunda değişmez. `/kamikaze/hold` ve `/kamikaze/abort` şu an arayüzden kullanılmıyor.
 
 ## ARM Kontrol Mantığı
 ARM için 3 koşul: araç bağlı + GPS fix ≥ 3 + batarya ≥ %20.
