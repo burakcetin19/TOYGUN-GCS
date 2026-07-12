@@ -7,12 +7,13 @@
 
     <div class="mod-butonlar">
       <button
-        class="tg-buton mod-buton kamikaze"
-        :disabled="!aracStore.aracCevrimici"
-        @click="modCalistir('kamikaze')"
+        class="tg-buton mod-buton"
+        :class="kamikazeAktif ? 'kamikaze-reset' : 'kamikaze'"
+        :disabled="!aracStore.aracCevrimici || kamikazeIslemde"
+        @click="kamikazeTetikle"
       >
-        <v-icon size="18" class="mr-2">mdi-target</v-icon>
-        KAMİKAZE MODU
+        <v-icon size="18" class="mr-2">{{ kamikazeAktif ? 'mdi-restart' : 'mdi-target' }}</v-icon>
+        {{ kamikazeAktif ? 'KAMİKAZE RESET' : 'KAMİKAZE BAŞLAT' }}
       </button>
 
       <button
@@ -66,6 +67,8 @@ import { servisCagir, rosbridgeDurumu } from '@/libs/ros2/rosbridge-baglanti'
 const aracStore = useAracStore()
 const onayGoster = ref(false)
 const islemde = ref(false)
+const kamikazeAktif = ref(false)     // true → RESET görünümü, false → BAŞLAT görünümü
+const kamikazeIslemde = ref(false)   // yalnızca bu butona özel meşguliyet kilidi
 
 const bildirim = (mesaj: string, tip: string) => {
   const fn = (window as any).__toygunBildirim
@@ -78,9 +81,46 @@ const termLog = (mesaj: string, tip: string) => {
 }
 
 const ROS2_SERVISLER: Record<string, string> = {
-  'kamikaze':  '/toygun/kamikaze_modu',
   'it-dalasi': '/toygun/it_dalasi_modu',
   'acil-inis': '/toygun/acil_inis',
+}
+
+const KAMIKAZE_START_SERVIS = '/kamikaze/start_mission'
+const KAMIKAZE_RESET_SERVIS = '/kamikaze/reset'
+
+const kamikazeTetikle = async () => {
+  if (kamikazeIslemde.value) return
+  kamikazeIslemde.value = true
+
+  if (rosbridgeDurumu.value !== 'baglandi') {
+    bildirim('ROS2 bağlı değil — Ayarlar\'dan bağlanın', 'hata')
+    kamikazeIslemde.value = false
+    return
+  }
+
+  const eylemEtiketi = kamikazeAktif.value ? 'RESET' : 'BAŞLAT'
+  const hedefServis = kamikazeAktif.value ? KAMIKAZE_RESET_SERVIS : KAMIKAZE_START_SERVIS
+
+  try {
+    termLog(`[ROS2] KAMİKAZE ${eylemEtiketi} → ${hedefServis} gönderiliyor...`, 'info')
+    const yanit = await servisCagir(hedefServis, 'std_srvs/srv/Trigger')
+    const mesaj = yanit.degerler?.message
+    const basarili = yanit.basarili === true && yanit.degerler?.success === true
+
+    if (basarili) {
+      kamikazeAktif.value = !kamikazeAktif.value
+      bildirim(`Kamikaze ${eylemEtiketi} başarılı — ${mesaj ?? 'komut kabul edildi'}`, 'basari')
+      termLog(`[ROS2] ✓ ${hedefServis} → ${mesaj ?? 'başarılı'}`, 'ok')
+    } else {
+      bildirim(`Kamikaze ${eylemEtiketi} reddedildi — ${mesaj ?? 'FSM isteği reddetti'}`, 'hata')
+      termLog(`[ROS2] ✗ ${hedefServis} → ${mesaj ?? 'reddedildi'}`, 'error')
+    }
+  } catch (hata: any) {
+    bildirim(`Kamikaze ${eylemEtiketi}: ${hata.message}`, 'hata')
+    termLog(`[ROS2] ✗ ${hedefServis} → ${hata.message}`, 'error')
+  } finally {
+    kamikazeIslemde.value = false
+  }
 }
 
 const modCalistir = async (mod: string) => {
@@ -88,7 +128,6 @@ const modCalistir = async (mod: string) => {
   islemde.value = true
 
   const adlar: Record<string, string> = {
-    'kamikaze': 'Kamikaze Modu',
     'it-dalasi': 'İt Dalaşı Modu',
   }
   const servisAdi = ROS2_SERVISLER[mod]
@@ -189,6 +228,16 @@ const acilInisOnayla = async () => {
 
 .kamikaze:hover:not(:disabled) {
   background: rgba(255, 128, 0, 0.35);
+}
+
+.kamikaze-reset {
+  background: rgba(220, 38, 38, 0.2);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  color: var(--tg-tehlike);
+}
+
+.kamikaze-reset:hover:not(:disabled) {
+  background: rgba(220, 38, 38, 0.4);
 }
 
 .it-dalasi {
