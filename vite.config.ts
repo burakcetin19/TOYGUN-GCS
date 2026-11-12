@@ -14,7 +14,15 @@ export default defineConfig({
         {
           entry: 'src/electron/main.ts',
           vite: {
-            build: { outDir: 'dist/electron' },
+            build: {
+              outDir: 'dist/electron',
+              rollupOptions: {
+                // Native modüller paketlenmemeli: serialport kendi .node dosyasını
+                // node_modules/@serialport/bindings-cpp/prebuilds altında arar.
+                // Paket içine gömülünce bu yolu bulamaz ve hiç yüklenemez.
+                external: ['serialport', 'rclnodejs'],
+              },
+            },
           },
           onstart: () => {
             // @ts-ignore

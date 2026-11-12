@@ -2,7 +2,7 @@
   <header class="ust-bar cam-panel-koyu">
     <!-- Sol: Logo + Görev Adı -->
     <div class="ust-bar-sol">
-      <div class="logo-resim" title="Toygun GCS"></div>
+      <div class="logo-resim" role="img" aria-label="Toygun logosu" title="Toygun GCS"></div>
       <span class="marka-adi">TOYGUN</span>
       <span class="marka-alt">GCS</span>
       <div class="ust-ayirici" />
@@ -58,6 +58,14 @@
       </div>
 
       <div class="ust-ayirici" />
+      <button
+        class="tema-dugmesi"
+        :title="temaStore.tema === 'koyu' ? 'Açık temaya geç' : 'Koyu temaya geç'"
+        :aria-label="temaStore.tema === 'koyu' ? 'Açık temaya geç' : 'Koyu temaya geç'"
+        @click="temaStore.temaDegistir()"
+      >
+        <v-icon size="16">{{ temaStore.tema === 'koyu' ? 'mdi-white-balance-sunny' : 'mdi-weather-night' }}</v-icon>
+      </button>
       <BaglantiPaneli />
       <div v-if="aracStore.simuleAktif" class="sim-rozeti" title="Simülasyon modu aktif">
         <v-icon size="12" class="mr-1">mdi-airplane-settings</v-icon>
@@ -75,9 +83,11 @@
 import { ref, computed, nextTick } from 'vue'
 import { useAracStore } from '@/stores/arac'
 import { useGorevStore } from '@/stores/gorev'
+import { useTemaStore } from '@/stores/tema'
 import BaglantiPaneli from '@/components/baglanti/BaglantiPaneli.vue'
 
 const aracStore = useAracStore()
+const temaStore = useTemaStore()
 const gorevStore = useGorevStore()
 
 const sayfalar = [
@@ -144,15 +154,34 @@ const bataryaClass = computed(() => ({
   min-width: 0;
 }
 
+/* Logo PNG'si maske olarak kullanılır; rengi temaya göre --tg-logo-renk'ten gelir */
 .logo-resim {
-  width: 50px;
-  height: 24px;
-  background-image: url('/toygun-logo.png');
-  background-size: 250%;
-  background-position: center;
-  background-repeat: no-repeat;
-  mix-blend-mode: screen;
+  width: 62px;
+  height: 23px;
+  background-color: var(--tg-logo-renk);
+  -webkit-mask: url('@/assets/toygun-logo-yatay.png') center / contain no-repeat;
+  mask: url('@/assets/toygun-logo-yatay.png') center / contain no-repeat;
   flex-shrink: 0;
+}
+
+.tema-dugmesi {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--tg-divider);
+  background: var(--tg-badge-bg);
+  color: var(--tg-metin-soluk);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tema-dugmesi:hover {
+  background: var(--tg-hover-bg-2);
+  color: var(--tg-turuncu);
 }
 
 .marka-adi {

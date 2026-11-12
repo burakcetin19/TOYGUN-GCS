@@ -43,6 +43,10 @@
     "productName": "Toygun GCS",
     "copyright": "Copyright © 2024 Toygun",
     "asar": true,
+    "asarUnpack": [
+      "node_modules/@serialport/bindings-cpp/**"
+    ],
+    "npmRebuild": false,
     "files": [
       "dist/**/*",
       "package.json"

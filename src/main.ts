@@ -10,24 +10,42 @@ import 'leaflet/dist/leaflet.css'
 import App from './App.vue'
 import router from './router'
 import './styles/global.css'
+import { kayitliTemaOku, temayiBelgeyeUygula } from './stores/tema'
+
+// Tema ilk boyamadan önce uygulanır — açılışta yanlış renk parlaması olmasın
+const baslangicTemasi = kayitliTemaOku()
+temayiBelgeyeUygula(baslangicTemasi)
 
 const vuetify = createVuetify({
   components,
   directives,
   theme: {
-    defaultTheme: 'toygunKoyu',
+    defaultTheme: baslangicTemasi === 'koyu' ? 'toygunKoyu' : 'toygunAcik',
     themes: {
+      toygunAcik: {
+        dark: false,
+        colors: {
+          background: '#f4f0e8',
+          surface: '#fffbf2',
+          primary: '#FF8000',
+          secondary: '#0ea5e9',
+          error: '#dc2626',
+          success: '#16a34a',
+          warning: '#d97706',
+          info: '#0ea5e9',
+        },
+      },
       toygunKoyu: {
         dark: true,
         colors: {
-          background: '#0a0a0a',
-          surface: '#1a1a2e',
+          background: '#0e1014',
+          surface: '#161a21',
           primary: '#FF8000',
-          secondary: '#47C7FC',
-          error: '#dc2626',
+          secondary: '#38bdf8',
+          error: '#ef4444',
           success: '#22c55e',
           warning: '#f59e0b',
-          info: '#47C7FC',
+          info: '#38bdf8',
         },
       },
     },

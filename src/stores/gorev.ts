@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 export interface Nokta {
   id: string
@@ -18,6 +18,11 @@ export const useGorevStore = defineStore('gorev', () => {
   const gorevCalisiyorMu = ref(false)
   const gorevAraca = ref(false)
   const mevcutHedefNokta = ref(0)
+
+  // Noktalar değişince araçtaki görev artık planla aynı değildir
+  watch(noktalar, () => {
+    if (!gorevYukleniyor.value) gorevAraca.value = false
+  }, { deep: true })
 
   const noktaEkle = (enlem: number, boylam: number, yukseklik = 100) => {
     noktalar.value.push({

@@ -8,7 +8,9 @@
  */
 
 import { useAracStore } from '@/stores/arac'
-import { px4ModuCoz, MAV_MODE_FLAG_SAFETY_ARMED } from './mesajlar'
+import { MAV_MODE_FLAG_SAFETY_ARMED } from './mesajlar'
+import { modAdiCoz, type Otopilot, type AracSinifi } from './otopilot'
+import { mesajYayinla } from './mesaj-olaylari'
 
 type AracStore = ReturnType<typeof useAracStore>
 
@@ -40,9 +42,8 @@ export function donanımDinleyiciBaslat(store: AracStore): void {
 
   // Ham MAVLink mesajlarını dinle
   api.onMavlinkMesaj(({ tip, veri }: { tip: string; veri: Record<string, any> }) => {
-    store.sonMesajZamani = Date.now()
-    if (tip === 'HEARTBEAT') sonHeartbeatZamani = Date.now()
-    mesajIsle(tip, veri, store)
+    if (tip === 'HEARTBEAT' && veri.aracHeartbeati !== false) sonHeartbeatZamani = Date.now()
+    mavlinkMesajiIsle(tip, veri, store)
   })
 
   // HEARTBEAT watchdog: 5 sn HEARTBEAT gelmezse bağlantı kopmuş say
@@ -72,7 +73,13 @@ export function donanımDinleyiciSifirla(): void {
 
 // ── Mesaj İşleme ───────────────────────────────────────────────────────────────
 
-function mesajIsle(tip: string, veri: Record<string, any>, store: AracStore): void {
+/**
+ * Çözülmüş bir MAVLink mesajını store'a yazar ve olay yoluna yayınlar.
+ * Electron IPC ve Web Serial yolları ortak kullanır.
+ */
+export function mavlinkMesajiIsle(tip: string, veri: Record<string, any>, store: AracStore): void {
+  store.sonMesajZamani = Date.now()
+  mesajYayinla(tip, veri)
   switch (tip) {
     case 'HEARTBEAT':
       heartbeatIsle(veri, store)
@@ -96,6 +103,12 @@ function mesajIsle(tip: string, veri: Record<string, any>, store: AracStore): vo
 }
 
 function heartbeatIsle(veri: any, store: AracStore): void {
+  // Kamera, gimbal, yardımcı bilgisayar veya başka bir GCS'in HEARTBEAT'i araç durumunu değiştirmez
+  if (veri.aracHeartbeati === false) return
+
+  if (veri.otopilot) store.otopilot = veri.otopilot as Otopilot
+  if (veri.aracSinifi) store.aracSinifi = veri.aracSinifi as AracSinifi
+
   // armed: donanim-baglanti.ts zaten hesapladı, ama base_mode ile de kontrol edebiliriz
   if (veri.armed !== undefined) {
     store.armed = veri.armed
@@ -105,7 +118,7 @@ function heartbeatIsle(veri: any, store: AracStore): void {
   if (veri.ucusModu) {
     store.ucusModu = veri.ucusModu
   } else if (veri.custom_mode !== undefined) {
-    store.ucusModu = px4ModuCoz(veri.custom_mode)
+    store.ucusModu = modAdiCoz(store.otopilot, store.aracSinifi, veri.custom_mode)
   }
 }
 

@@ -448,7 +448,7 @@ watch(kilitliMode, (v) => {
   display: flex;
   align-items: center;
   padding: 8px 18px;
-  background: rgba(255, 251, 242, 0.97);
+  background: var(--tg-panel-bg);
   border: 1px solid var(--tg-panel-border);
   border-radius: 20px;
   font-size: 12px;

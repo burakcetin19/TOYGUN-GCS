@@ -56,7 +56,7 @@
 
       <!-- Grafikler -->
       <div v-if="aktifDegiskenler.size === 0" class="tv-bos">
-        <v-icon size="40" color="rgba(255,255,255,0.08)">mdi-chart-line</v-icon>
+        <v-icon size="40" color="var(--tg-metin-cok-soluk)">mdi-chart-line</v-icon>
         <p>Sol panelden değişken seçerek grafik ekleyin</p>
       </div>
 
@@ -300,7 +300,7 @@ onUnmounted(() => { if (zamanlayici) clearInterval(zamanlayici) })
 .tv-frekans {
   margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--tg-divider);
 }
 
 .tv-etiket {
@@ -320,7 +320,7 @@ onUnmounted(() => { if (zamanlayici) clearInterval(zamanlayici) })
   flex: 1;
   appearance: none;
   height: 4px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--tg-hover-bg-2);
   border-radius: 2px;
   outline: none;
 }
@@ -360,7 +360,7 @@ onUnmounted(() => { if (zamanlayici) clearInterval(zamanlayici) })
 }
 
 .tv-kat-baslik:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tg-subtle-bg);
 }
 
 .tv-degisken-listesi {
@@ -384,7 +384,7 @@ onUnmounted(() => { if (zamanlayici) clearInterval(zamanlayici) })
 }
 
 .tv-degisken:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tg-subtle-bg);
   color: var(--tg-metin);
 }
 
@@ -416,7 +416,7 @@ onUnmounted(() => { if (zamanlayici) clearInterval(zamanlayici) })
   font-size: 11px;
   font-weight: 500;
   color: var(--tg-metin);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tg-hover-bg);
   border: 1px solid;
 }
 
@@ -451,7 +451,7 @@ onUnmounted(() => { if (zamanlayici) clearInterval(zamanlayici) })
 
 .tv-grafik-kart {
   background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--tg-divider);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -461,7 +461,7 @@ onUnmounted(() => { if (zamanlayici) clearInterval(zamanlayici) })
   justify-content: space-between;
   align-items: center;
   padding: 6px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--tg-divider);
 }
 
 .tv-grafik-adi {

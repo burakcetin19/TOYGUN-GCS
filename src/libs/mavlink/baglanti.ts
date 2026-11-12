@@ -11,9 +11,11 @@ import {
   type MavlinkAttitude,
   type MavlinkGlobalPositionInt,
   type MavlinkGpsRawInt,
-  px4ModuCoz,
   MAV_MODE_FLAG_SAFETY_ARMED,
 } from './mesajlar'
+import {
+  otopilotBelirle, aracSinifiBelirle, aracHeartbeatiMi, modAdiCoz, enumSayisi,
+} from './otopilot'
 
 /** Bağlantı konfigürasyonu */
 export interface BaglantiAyarlari {
@@ -144,45 +146,46 @@ export function mavlinkKes(): void {
  *  2. Electron IPC (native serial/UDP/TCP) → main process byte yazar
  *  3. REST fallback (mavlink2rest WebSocket modu)
  */
-export function mavlinkKomutGonder(komut: Record<string, any>): void {
-  // 1. Web Serial (renderer'dan doğrudan yazma)
-  import('./web-serial-baglanti').then(({ webSerialAktifMi, webSerialYaz }) => {
+export interface KomutSonucu {
+  basarili: boolean
+  hata?: string
+}
+
+export async function mavlinkKomutGonder(komut: Record<string, any>): Promise<KomutSonucu> {
+  try {
+    // 1. Web Serial (renderer'dan doğrudan yazma)
+    const { webSerialAktifMi, webSerialYaz } = await import('./web-serial-baglanti')
     if (webSerialAktifMi()) {
-      import('./kodlama').then(({ komutKodet }) => {
-        const bytes = komutKodet(komut)
-        if (bytes) {
-          webSerialYaz(bytes).catch((e: any) =>
-            console.warn('[MAVLink] Web Serial yazma hatası:', e),
-          )
-        } else {
-          console.warn('[MAVLink] Komut encode edilemedi:', komut?.message?.type)
-        }
-      })
-      return
+      const { komutKodla } = await import('./cerceve')
+      const bytes = komutKodla(komut)
+      if (!bytes) {
+        console.warn('[MAVLink] Komut encode edilemedi:', komut?.message?.type)
+        return { basarili: false, hata: `Desteklenmeyen mesaj tipi: ${komut?.message?.type}` }
+      }
+      await webSerialYaz(bytes)
+      return { basarili: true }
     }
 
     // 2. Electron IPC — native serial/UDP/TCP bağlantısı (main process bayt yazar)
+    const url = wsUrldenHttpYap(aktifAyarlar.wsUrl)
     const api = (window as any).toygunAPI
     if (typeof api?.mavlinkKomutGonder === 'function') {
-      const url = wsUrldenHttpYap(aktifAyarlar.wsUrl)
-      api.mavlinkKomutGonder(komut, url).catch((e: any) =>
-        console.warn('[MAVLink] Komut IPC hatası:', e),
-      )
-      return
+      const sonuc = await api.mavlinkKomutGonder(komut, url)
+      return { basarili: !!sonuc?.basarili, hata: sonuc?.hata ?? (sonuc?.durum ? `HTTP ${sonuc.durum}` : undefined) }
     }
 
     // 3. REST fallback (mavlink2rest)
-    const url = wsUrldenHttpYap(aktifAyarlar.wsUrl)
-    fetch(url, {
+    const yanit = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(komut),
     })
-      .then(yanit => {
-        if (!yanit.ok) console.warn(`[MAVLink] Komut reddedildi: HTTP ${yanit.status}`)
-      })
-      .catch(hata => console.warn('[MAVLink] Komut gönderilemedi:', hata))
-  })
+    if (!yanit.ok) console.warn(`[MAVLink] Komut reddedildi: HTTP ${yanit.status}`)
+    return { basarili: yanit.ok, hata: yanit.ok ? undefined : `HTTP ${yanit.status}` }
+  } catch (hata: any) {
+    console.warn('[MAVLink] Komut gönderilemedi:', hata)
+    return { basarili: false, hata: hata?.message ?? String(hata) }
+  }
 }
 
 /**
@@ -249,8 +252,15 @@ function mesajTipiCikar(veri: any): string | null {
 }
 
 function heartbeatIsle(msg: MavlinkHeartbeat, store: ReturnType<typeof useAracStore>): void {
+  const m = msg as any
+  const autopilot = enumSayisi(m.autopilot, 'autopilot')
+  const mavType = enumSayisi(m.mavtype ?? m.type, 'mavType')
+  // Alanlar biliniyorsa ve araç dışı bir bileşense (kamera, GCS…) yok say
+  if (autopilot >= 0 && mavType >= 0 && !aracHeartbeatiMi(autopilot, mavType)) return
+  if (autopilot >= 0) store.otopilot = otopilotBelirle(autopilot)
+  if (mavType >= 0) store.aracSinifi = aracSinifiBelirle(mavType)
   store.armed = (msg.base_mode?.bits & MAV_MODE_FLAG_SAFETY_ARMED) !== 0
-  store.ucusModu = px4ModuCoz(msg.custom_mode)
+  store.ucusModu = modAdiCoz(store.otopilot, store.aracSinifi, msg.custom_mode)
 }
 
 function vfrHudIsle(msg: MavlinkVfrHud, store: ReturnType<typeof useAracStore>): void {

@@ -165,17 +165,17 @@ onMounted(() => {
 
 .gk-btn-atla {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--tg-input-border);
   color: var(--tg-metin-soluk);
 }
 
 .gk-btn-atla:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--tg-hover-bg);
 }
 
 .gk-ilerleme {
   height: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--tg-hover-bg-2);
   border-radius: 2px;
   overflow: hidden;
 }

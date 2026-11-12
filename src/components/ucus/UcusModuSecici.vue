@@ -3,6 +3,9 @@
     <h3 class="modlar-baslik">
       <v-icon size="16" class="mr-1">mdi-airplane-cog</v-icon>
       UÇUŞ MODU
+      <span v-if="aracStore.aracCevrimici" class="otopilot-rozeti" :title="`HEARTBEAT: ${aracStore.otopilot}`">
+        {{ otopilotEtiketi(aracStore.otopilot, aracStore.aracSinifi) }}
+      </span>
     </h3>
 
     <div class="aktif-mod-satir">
@@ -10,94 +13,86 @@
       <span class="aktif-mod-deger">{{ aracStore.ucusModu }}</span>
     </div>
 
-    <!-- Temel modlar -->
-    <div class="mod-grup-baslik">Temel</div>
-    <div class="mod-izgara">
-      <button
-        v-for="mod in TEMEL_MODLAR"
-        :key="mod.customMode"
-        class="mod-izgara-buton"
-        :class="{ 'mod-aktif': aktifMi(mod.ad) }"
-        :disabled="!aracStore.aracCevrimici"
-        :title="mod.ad"
-        @click="modSec(mod.customMode, mod.ad)"
-      >
-        <v-icon size="12">{{ mod.ikon }}</v-icon>
-        <span>{{ mod.ad }}</span>
-      </button>
-    </div>
-
-    <!-- Otonom modlar -->
-    <div class="mod-grup-baslik">Otonom</div>
-    <div class="mod-izgara">
-      <button
-        v-for="mod in OTO_MODLAR"
-        :key="mod.customMode"
-        class="mod-izgara-buton"
-        :class="{ 'mod-aktif': aktifMi(mod.ad) }"
-        :disabled="!aracStore.aracCevrimici"
-        :title="mod.ad"
-        @click="modSec(mod.customMode, mod.ad)"
-      >
-        <v-icon size="12">{{ mod.ikon }}</v-icon>
-        <span>{{ mod.ad }}</span>
-      </button>
-    </div>
+    <template v-for="grup in gruplar" :key="grup.anahtar">
+      <div class="mod-grup-baslik">{{ grup.baslik }}</div>
+      <div class="mod-izgara">
+        <button
+          v-for="mod in grup.modlar"
+          :key="mod.ad"
+          class="mod-izgara-buton"
+          :class="{ 'mod-aktif': aktifMi(mod.ad) }"
+          :disabled="!aracStore.aracCevrimici || gonderiliyor !== null"
+          :title="mod.ad"
+          @click="modSec(mod)"
+        >
+          <v-icon size="12">{{ gonderiliyor === mod.ad ? 'mdi-loading mdi-spin' : mod.ikon }}</v-icon>
+          <span>{{ mod.ad }}</span>
+        </button>
+      </div>
+    </template>
 
     <div v-if="!aracStore.aracCevrimici" class="mod-uyari">
       <v-icon size="14">mdi-alert-circle-outline</v-icon>
       <span>Araç bağlı değil</span>
     </div>
+    <div v-else-if="modlar.length === 0" class="mod-uyari">
+      <v-icon size="14">mdi-help-circle-outline</v-icon>
+      <span>Otopilot tanınmadı — yanlış mod göndermemek için mod seçimi kapalı</span>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useAracStore } from '@/stores/arac'
-import { ucusModuDegistir } from '@/libs/mavlink/komutlar'
+import { modDegistirGonder } from '@/libs/mavlink/komutlar'
+import { modListesi, otopilotEtiketi, type UcusModuTanimi } from '@/libs/mavlink/otopilot'
 
 const aracStore = useAracStore()
 
-/**
- * Modern PX4 (v1.10+) custom_mode encode:
- *   bit16-23 = main_mode, bit24-31 = sub_mode
- *   Yalnızca AUTO (main=4) modlarında sub_mode kullanılır.
- */
-const px4Mod = (main: number, sub = 0): number => (sub << 24) | (main << 16)
+/** Bağlı aracın otopilotuna (PX4 / ArduPilot) ve sınıfına göre mod listesi */
+const modlar = computed(() => modListesi(aracStore.otopilot, aracStore.aracSinifi))
 
-interface Mod {
-  customMode: number  // SET_MODE komutuna gönderilecek değer
-  ad: string          // HEARTBEAT'ten decode edilen isim (aktif mod karşılaştırması için)
-  ikon: string
+const GRUP_BASLIKLARI: Record<UcusModuTanimi['grup'], string> = {
+  temel: 'Temel',
+  otonom: 'Otonom',
+  vtol: 'VTOL',
 }
 
-// main_mode referansı: 1=MANUAL, 2=ALTCTL, 3=POSCTL, 4=AUTO, 5=ACRO, 6=OFFBOARD, 7=STABILIZED
-const TEMEL_MODLAR: Mod[] = [
-  { customMode: px4Mod(1), ad: 'MANUAL',     ikon: 'mdi-hand-back-right'   },
-  { customMode: px4Mod(7), ad: 'STABILIZED', ikon: 'mdi-airplane-check'    },
-  { customMode: px4Mod(2), ad: 'ALTCTL',     ikon: 'mdi-altimeter'         },
-  { customMode: px4Mod(3), ad: 'POSCTL',     ikon: 'mdi-crosshairs-gps'    },
-  { customMode: px4Mod(5), ad: 'ACRO',       ikon: 'mdi-rotate-3d-variant' },
-  { customMode: px4Mod(6), ad: 'OFFBOARD',   ikon: 'mdi-remote'            },
-]
+const gruplar = computed(() =>
+  (['temel', 'otonom', 'vtol'] as const)
+    .map((anahtar) => ({ anahtar, baslik: GRUP_BASLIKLARI[anahtar], modlar: modlar.value.filter((m) => m.grup === anahtar) }))
+    .filter((g) => g.modlar.length > 0),
+)
 
-// sub_mode referansı (main=4/AUTO): 2=TAKEOFF, 3=LOITER, 4=MISSION, 5=RTL, 6=LAND
-const OTO_MODLAR: Mod[] = [
-  { customMode: px4Mod(4, 3), ad: 'AUTO.LOITER',  ikon: 'mdi-motion-pause'        },
-  { customMode: px4Mod(4, 4), ad: 'AUTO.MISSION',  ikon: 'mdi-map-marker-path'     },
-  { customMode: px4Mod(4, 5), ad: 'AUTO.RTL',      ikon: 'mdi-home-import-outline' },
-  { customMode: px4Mod(4, 2), ad: 'AUTO.TAKEOFF',  ikon: 'mdi-airplane-takeoff'    },
-  { customMode: px4Mod(4, 6), ad: 'AUTO.LAND',     ikon: 'mdi-airplane-landing'    },
-]
-
-// Store'daki ucusModu zaten decode edilmiş string — doğrudan karşılaştır
+// Store'daki ucusModu aynı tablodan çözülmüş ad — doğrudan karşılaştır
 const aktifMi = (ad: string): boolean => ad === aracStore.ucusModu
 
-const modSec = (customMode: number, ad: string) => {
-  ucusModuDegistir(customMode)
+const gonderiliyor = ref<string | null>(null)
+
+const modSec = async (mod: UcusModuTanimi) => {
+  if (aracStore.simuleAktif) {
+    aracStore.ucusModu = mod.ad
+    return
+  }
   const terminal = (window as any).__toygunTerminal
   const bildirim = (window as any).__toygunBildirim
-  if (terminal) terminal(`[MAVLink] Uçuş modu → ${ad}`, 'info')
-  if (bildirim) bildirim(`Mod değiştiriliyor: ${ad}`, 'bilgi')
+  terminal?.(`Uçuş modu → ${mod.ad} gönderiliyor…`, 'sys')
+  gonderiliyor.value = mod.ad
+  try {
+    const sonuc = await modDegistirGonder(mod)
+    if (sonuc.durum === 'kabul') {
+      terminal?.(sonuc.mesaj, 'ok')
+    } else if (sonuc.durum === 'yanitYok') {
+      terminal?.(sonuc.mesaj, 'warn')
+      bildirim?.(sonuc.mesaj, 'uyari')
+    } else {
+      terminal?.(sonuc.mesaj, 'error')
+      bildirim?.(sonuc.mesaj, 'hata')
+    }
+  } finally {
+    gonderiliyor.value = null
+  }
 }
 </script>
 
@@ -117,6 +112,17 @@ const modSec = (customMode: number, ad: string) => {
   letter-spacing: 1.5px;
   color: var(--tg-metin-soluk);
   margin-bottom: 2px;
+}
+
+.otopilot-rozeti {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--tg-badge-bg);
+  border: 1px solid var(--tg-divider);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--tg-metin-soluk);
 }
 
 .aktif-mod-satir {

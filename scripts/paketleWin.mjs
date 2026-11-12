@@ -36,15 +36,20 @@ execSync(
   `--platform=win32 --arch=x64 ` +
   `--out="${ciktiKlasoru}" ` +
   `--overwrite ` +
-  `--asar ` +
+  // asar paketi + native modüller (.node) dışarıda — asar içinden yüklenemezler.
+  // (--asar ile --asar.unpack birlikte verilirse unpack yok sayılır)
+  `--asar.unpack="**/*.node" ` +
   `--icon="public/toygun-logo.ico" ` +
   `--app-version="${surum}" ` +
   `--electron-version="${paket.devDependencies.electron.replace('^', '')}" ` +
-  `--ignore="node_modules" ` +
-  `--ignore="release" ` +
-  `--ignore="src" ` +
-  `--ignore=".git" ` +
-  `--ignore="scripts"`,
+  // node_modules artık dışlanmıyor: serialport (native) çalışma zamanında gerekli.
+  // electron-packager devDependencies'i kendisi budar (prune).
+  // Kalıplar köke sabitlendi — aksi halde node_modules içindeki "src"/"scripts" klasörleri de silinir.
+  `--ignore="^/release($|/)" ` +
+  `--ignore="^/src($|/)" ` +
+  `--ignore="^/\\.git($|/)" ` +
+  `--ignore="^/\\.claude($|/)" ` +
+  `--ignore="^/scripts($|/)"`,
   { cwd: kok, stdio: 'inherit' }
 )
 
