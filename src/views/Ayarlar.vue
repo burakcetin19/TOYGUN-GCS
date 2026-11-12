@@ -106,7 +106,7 @@
           <div class="hakkinda-logo" role="img" aria-label="Toygun logosu" />
           <p class="hakkinda-baslik">TOYGUN GCS</p>
           <p class="hakkinda-aciklama">PX4 sabit kanatlı araçlar için özelleştirilmiş yer kontrol istasyonu</p>
-          <p class="hakkinda-versiyon">Sürüm 1.0.0</p>
+          <p class="hakkinda-versiyon">Sürüm {{ uygulamaSurumu }}</p>
         </div>
       </div>
     </div>
@@ -126,6 +126,7 @@ import {
 
 const aracStore = useAracStore()
 const temaStore = useTemaStore()
+const uygulamaSurumu = __UYGULAMA_SURUMU__
 const temaSecenekleri: { deger: TemaAdi; ad: string; ikon: string }[] = [
   { deger: 'acik', ad: 'Açık', ikon: 'mdi-white-balance-sunny' },
   { deger: 'koyu', ad: 'Koyu', ikon: 'mdi-weather-night' },

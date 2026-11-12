@@ -3,6 +3,9 @@ import path from 'path'
 import { defineConfig } from 'vite'
 import electron, { startup, treeKillSync } from 'vite-plugin-electron'
 import vuetify from 'vite-plugin-vuetify'
+import { readFileSync } from 'fs'
+
+const paketSurumu: string = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version
 
 const isElectron = process.env.ELECTRON === 'true'
 const isBuilding = process.argv.includes('build')
@@ -43,6 +46,10 @@ export default defineConfig({
     vue(),
     vuetify({ autoImport: true }),
   ].filter(Boolean),
+  define: {
+    // Arayüzde gösterilen sürüm — package.json ile tek kaynak
+    __UYGULAMA_SURUMU__: JSON.stringify(paketSurumu),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
