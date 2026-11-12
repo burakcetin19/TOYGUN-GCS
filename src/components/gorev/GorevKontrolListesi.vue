@@ -7,7 +7,7 @@
 
     <div class="kl-icerik">
       <div v-for="madde in maddeler" :key="madde.id" class="kl-madde" :class="{ 'kl-tamam': madde.tamam }">
-        <v-icon size="16" :color="madde.tamam ? '#22c55e' : 'rgba(255,255,255,0.25)'">
+        <v-icon size="16" :color="madde.tamam ? '#22c55e' : 'var(--tg-metin-cok-soluk)'">
           {{ madde.tamam ? 'mdi-check-circle' : 'mdi-circle-outline' }}
         </v-icon>
         <span>{{ madde.metin }}</span>
@@ -104,7 +104,7 @@ const tumTamam = computed(() => tamamSayisi.value === maddeler.value.length)
   border-radius: 6px;
   font-size: 12px;
   color: var(--tg-metin-soluk);
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--tg-subtle-bg);
   transition: all 0.3s;
 }
 

@@ -31,7 +31,7 @@
     <div class="md-sag">
       <h4 class="md-bolum-baslik">Mesaj Değerleri</h4>
       <div v-if="seciliTipler.size === 0" class="md-bos">
-        <v-icon size="32" color="rgba(255,255,255,0.1)">mdi-message-text-outline</v-icon>
+        <v-icon size="32" color="var(--tg-metin-cok-soluk)">mdi-message-text-outline</v-icon>
         <p>Bir mesaj tipine tıklayarak detaylarını görüntüleyin</p>
       </div>
       <div v-else class="md-degerler">
@@ -256,7 +256,7 @@ const gidenMesajlar = computed<Record<number, MesajAlani[] | null>>(() => {
   display: flex;
   height: 100%;
   gap: 1px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tg-subtle-bg);
 }
 
 .md-sol {
@@ -294,8 +294,8 @@ const gidenMesajlar = computed<Record<number, MesajAlani[] | null>>(() => {
   flex: 1;
   padding: 6px 8px;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tg-hover-bg);
+  border: 1px solid var(--tg-input-border);
   border-radius: 4px;
   color: var(--tg-turuncu);
   outline: none;
@@ -331,7 +331,7 @@ const gidenMesajlar = computed<Record<number, MesajAlani[] | null>>(() => {
 }
 
 .md-liste-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tg-hover-bg);
   color: var(--tg-metin);
 }
 
@@ -359,7 +359,7 @@ const gidenMesajlar = computed<Record<number, MesajAlani[] | null>>(() => {
 }
 
 .md-mesaj-kutu {
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--tg-divider);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -369,8 +369,8 @@ const gidenMesajlar = computed<Record<number, MesajAlani[] | null>>(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--tg-subtle-bg);
+  border-bottom: 1px solid var(--tg-divider);
 }
 
 .md-mesaj-adi {
@@ -383,7 +383,7 @@ const gidenMesajlar = computed<Record<number, MesajAlani[] | null>>(() => {
 
 .md-yonlu {
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--tg-divider);
 }
 
 .md-yonlu:last-child {

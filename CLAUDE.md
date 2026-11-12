@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Proje Özeti
-PX4 tabanlı sabit kanatlı insansız hava araçları için geliştirilmiş özelleşmiş bir Yer Kontrol İstasyonu (GCS). Hem **Electron masaüstü uygulaması** hem de **web uygulaması** olarak çalışabilir. Referans proje: `../cockpit/` (BlueRobotics Cockpit, sadece okuma).
+PX4 tabanlı sabit kanatlı insansız hava araçları için geliştirilmiş özelleşmiş bir Yer Kontrol İstasyonu (GCS). ArduPilot (ArduPlane/ArduCopter) araçlarını da tanır. Hem **Electron masaüstü uygulaması** hem de **web uygulaması** olarak çalışabilir. Referans proje: `../cockpit/` (BlueRobotics Cockpit, sadece okuma).
 
 ## Teknoloji Stack
 | Katman | Teknoloji |
@@ -124,17 +124,32 @@ Bağlantı kesilirse 3 sn sonra otomatik yeniden bağlanır.
 
 ### Komutlar (src/libs/mavlink/komutlar.ts)
 ```ts
-aracArmDisarm(arm: boolean)          // MAV_CMD_COMPONENT_ARM_DISARM
-ucusModuDegistir(customMode: number) // SET_MODE
-eveDon()                             // AUTO.RTL (mod 5)
-inisYap()                            // AUTO.LAND (mod 11)
-gorevBaslat()                        // MAV_CMD_MISSION_START
-evNoktasiAyarla(enlem, boylam, alt)  // MAV_CMD_DO_SET_HOME
-gorevYukle(noktalar[])               // MISSION_COUNT + MISSION_ITEM_INT (50ms aralıklı)
+armDisarmGonder(arm): Promise<KomutAckSonucu>   // MAV_CMD_COMPONENT_ARM_DISARM + COMMAND_ACK bekler (3 sn)
+modDegistirGonder(mod: UcusModuTanimi)          // MAV_CMD_DO_SET_MODE + ACK — mod, otopilot.ts → modListesi()'nden
+eveDon() / inisYap()                            // bağlı otopilota göre RTL / LAND (ArduPlane'de LAND modu yok)
+gorevBaslat()                                   // MAV_CMD_MISSION_START
+evNoktasiAyarla(enlem, boylam, alt)             // MAV_CMD_DO_SET_HOME
+gorevYukle(noktalar[], ilerleme?, { otopilot, evKonumu })  // Mission protokolü: COUNT → REQUEST_INT⇄ITEM_INT → ACK
 ```
+`mavlinkKomutGonder()` (baglanti.ts) `Promise<{ basarili, hata? }>` döner.
 
-### PX4 Uçuş Modları (src/libs/mavlink/mesajlar.ts — PX4_UCM_MODLARI)
-`0:MANUAL, 1:ALTCTL, 2:POSCTL, 3:AUTO.MISSION, 4:AUTO.LOITER, 5:AUTO.RTL, 6:ACRO, 8:STABILIZED, 9:OFFBOARD, 10:AUTO.TAKEOFF, 11:AUTO.LAND, 12:AUTO.FOLLOW, 14:AUTO.PRECLAND`
+### Ortak çerçeve katmanı (src/libs/mavlink/cerceve.ts)
+Electron ana süreci (Serial/UDP/TCP) ve Web Serial **aynı** ayrıştırıcıyı kullanır: CRC doğrulaması (CRC_EXTRA tablosu),
+MAVLink v2 sıfır-kırpma için payload doldurma, mesaj çözümü (`cerceveCoz`) ve kodlayıcılar (`komutKodla`).
+Yeni bir mesaj eklerken `CRC_EXTRA` ve `TAM_UZUNLUK` tablolarına da eklenmeli — yoksa çerçeve atlanır.
+Çözülen mesajlar `donanim-dinleyici.ts → mavlinkMesajiIsle()` ile store'a yazılır ve `mesaj-olaylari.ts`
+olay yoluna yayınlanır (`mesajDinle` / `mesajBekle` — ACK ve görev yanıtları buradan beklenir).
+mavlink2rest (WebSocket) yolu henüz olay yoluna yayın yapmaz; bu yolda ARM ACK'i ve görev yükleme yanıt alamaz.
+
+### Otopilot desteği: PX4 + ArduPilot (src/libs/mavlink/otopilot.ts)
+Otopilot `HEARTBEAT.autopilot`'tan (12 = PX4, 3 = ArduPilot), araç sınıfı `HEARTBEAT.type`'tan belirlenir →
+`aracStore.otopilot` / `aracStore.aracSinifi`. Mod adı, mod seçici listesi ve "otonom mu" bilgisi buna göre seçilir.
+- **PX4** custom_mode: `(main<<16)|(sub<<24)` — DO_SET_MODE `param2=main, param3=sub`. Çözüm: `mesajlar.ts → px4ModuCoz`.
+- **ArduPilot** custom_mode düz numara, araç tipine göre tablo (ArduPlane / ArduCopter) — DO_SET_MODE `param2=mod`.
+- **ArduPilot görevleri:** öğe 0 ev noktasına ayrılmıştır; `gorevYukle` ArduPilot'ta başa ev yer tutucusu ekler.
+- `autopilot=INVALID (8)` veya `type=GCS (6)` HEARTBEAT'leri (kamera, gimbal, başka GCS) araç durumunu değiştirmez.
+- Tanınmayan otopilotta mod seçici kapalıdır (yanlış mod göndermemek için).
+- `aracStore.otonomMu` yarışma telemetrisindeki `iha_otonom` alanını besler (PX4: `AUTO.*`; ArduPlane: AUTO, RTL, LOITER, CIRCLE, TAKEOFF, GUIDED…).
 
 ## Çok Protokol Bağlantı Mimarisi
 
@@ -191,8 +206,15 @@ ROS2 servisleri `std_srvs/Trigger` tipinde. `rosbridge-baglanti.ts` → rosbridg
 **Kamikaze toggle:** Buton iki durumlu — başlangıçta "KAMİKAZE BAŞLAT" gösterir. Tıklanınca `/kamikaze/start_mission` çağrılır (gerçek `kamikaze_fsm` düğümü, ayrı `~/yukio-seki` workspace'inde). Servis yanıtının `degerler.success === true` olması durumunda (FSM yalnızca kendi fazı `IDLE` iken kabul eder) buton "KAMİKAZE RESET"e döner; tekrar tıklanınca `/kamikaze/reset` çağrılır (FSM'de koşulsuz başarılı) ve buton "KAMİKAZE BAŞLAT"a geri döner. `degerler.message` alanındaki FSM'in insan-okur sebep metni bildirim/terminal loguna yansıtılır. Buton durumu yalnızca gerçek servis başarısında (`yanit.basarili && degerler.success`) değişir — bağlantı kopukluğu/zaman aşımı/red durumunda değişmez. `/kamikaze/hold` ve `/kamikaze/abort` şu an arayüzden kullanılmıyor.
 
 ## ARM Kontrol Mantığı
-ARM için 3 koşul: araç bağlı + GPS fix ≥ 3 + batarya ≥ %20.
-`armHataKontrol()` → hata listesi, `armEt()` → `{ basarili, hatalar }`.
+GCS ön kontrolü: araç bağlı + GPS fix ≥ 3 + batarya ≥ %20 (batarya bilinmiyorsa (-1) engellemez).
+`armHataKontrol()` → hata listesi, `armEt()` → `{ basarili, hatalar }` — gerçek araçta `armed`'i **değiştirmez**
+(yalnızca simülasyonda). `ArmKaydirici.vue` ön kontrolden sonra `armDisarmGonder()` çağırır; `armed` durumu her zaman
+HEARTBEAT'ten gelir. DISARM iki tıklama ister (3 sn içinde onay); zorla disarm (21196) kullanılmaz.
+
+## Paketleme ve native modüller
+`serialport` native bir modüldür: `vite.config.ts`'te Electron ana süreci için `external` tutulur ve paketlere
+`node_modules` ile birlikte girer (`paketleWin.mjs`: `--asar.unpack="**/*.node"`, electron-builder: `asarUnpack`).
+`@serialport/bindings-cpp` N-API prebuild'leri (win32-x64 dahil) içerdiği için yeniden derleme gerekmez.
 
 ## CSS Tasarım Sistemi
 Renk paleti (`src/styles/global.css`, `--tg-*` prefix):

@@ -157,7 +157,7 @@ const zamanFarkKritik = computed(() => sunucuStore.zamanFarkKritik)
 }
 
 .panel-sekme:hover {
-  background: rgba(255, 251, 242, 0.98);
+  background: var(--tg-panel-bg);
 }
 
 .panel-acik .panel-sekme {

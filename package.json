@@ -1,6 +1,6 @@
 {
   "name": "toygun-gcs",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "author": "Toygun",
   "description": "Toygun — PX4 sabit kanatlı araçlar için özelleştirilmiş yer kontrol istasyonu",
@@ -10,8 +10,9 @@
     "dev:electron": "cross-env ELECTRON=true vite --host",
     "build": "cross-env ELECTRON=true vite build",
     "dist:win": "cross-env ELECTRON=true vite build && node scripts/paketleWin.mjs",
-    "dist:win:installer": "cross-env ELECTRON=true vite build && electron-builder --win --x64",
-    "typecheck": "vue-tsc --noEmit"
+    "dist:win:installer": "cross-env ELECTRON=true vite build && electron-builder --win --x64 --publish never",
+    "typecheck": "vue-tsc --noEmit",
+    "dist:linux": "cross-env ELECTRON=true vite build && electron-builder --linux --x64 --publish never"
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
@@ -43,16 +44,15 @@
     "productName": "Toygun GCS",
     "copyright": "Copyright © 2024 Toygun",
     "asar": true,
+    "asarUnpack": [
+      "node_modules/@serialport/bindings-cpp/**"
+    ],
+    "npmRebuild": false,
     "files": [
       "dist/**/*",
       "package.json"
     ],
-    "extraFiles": [
-      {
-        "from": "resources/Masaüstüne_Ekle.bat",
-        "to": "Masaüstüne_Ekle.bat"
-      }
-    ],
+    "artifactName": "Toygun-GCS-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release",
       "buildResources": "resources"
@@ -60,20 +60,52 @@
     "win": {
       "target": [
         {
-          "target": "dir",
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "x64"
           ]
         }
       ],
-      "icon": "public/toygun-logo.png"
+      "icon": "resources/toygun-logo.ico",
+      "extraFiles": [
+        {
+          "from": "resources/Masaüstüne_Ekle.bat",
+          "to": "Masaüstüne_Ekle.bat"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "tar.gz",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/toygun-logo.png",
+      "category": "Science",
+      "synopsis": "PX4/ArduPilot sabit kanat yer kontrol istasyonu"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Toygun GCS"
+      "shortcutName": "Toygun GCS",
+      "artifactName": "Toygun-GCS-${version}-win-${arch}-kurulum.${ext}"
     },
     "publish": {
       "provider": "github",

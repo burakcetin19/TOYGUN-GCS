@@ -172,7 +172,7 @@ export const useSunucuStore = defineStore('sunucu', () => {
   async function telemetriGonder(): Promise<void> {
     const aracStore = useAracStore()
     try {
-      const ihaOtonom = aracStore.ucusModu?.startsWith('AUTO') ? 1 : 0
+      const ihaOtonom = aracStore.otonomMu ? 1 : 0
 
       const res = await fetchSesyon(`${temelUrl()}/api/telemetri_gonder`, {
         method: 'POST',

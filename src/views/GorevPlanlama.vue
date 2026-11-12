@@ -24,7 +24,7 @@
         </button>
       </div>
 
-      <v-divider class="my-3" style="border-color: rgba(255,255,255,0.06)" />
+      <v-divider class="my-3" style="border-color: var(--tg-divider)" />
 
       <!-- Waypoint listesi -->
       <div v-if="gorevStore.noktalar.length > 0" class="nokta-listesi">
@@ -38,16 +38,16 @@
         </div>
       </div>
 
-      <v-divider v-if="gorevStore.noktalar.length > 0" class="my-3" style="border-color: rgba(255,255,255,0.06)" />
+      <v-divider v-if="gorevStore.noktalar.length > 0" class="my-3" style="border-color: var(--tg-divider)" />
 
       <!-- Eylemler -->
       <div class="panel-eylemler">
         <button
-          :disabled="gorevStore.noktalar.length < 2 || !aracStore.aracCevrimici"
+          :disabled="gorevStore.noktalar.length < 2 || !aracStore.aracCevrimici || gorevStore.gorevYukleniyor"
           class="tg-buton tg-buton-turuncu tam-genislik"
           @click="gorevYukle"
         >
-          ARACA YÜKLE
+          {{ gorevStore.gorevYukleniyor ? `YÜKLENİYOR… ${yuklemeIlerleme}` : 'ARACA YÜKLE' }}
         </button>
         <button
           v-if="gorevStore.noktalar.length > 0"
@@ -70,7 +70,7 @@
         </button>
       </div>
 
-      <v-divider class="my-3" style="border-color: rgba(255,255,255,0.06)" />
+      <v-divider class="my-3" style="border-color: var(--tg-divider)" />
 
       <!-- Görev Kontrol Listesi -->
       <GorevKontrolListesi />
@@ -89,6 +89,7 @@ import GorevHaritasi from '@/components/harita/GorevHaritasi.vue'
 import GorevKontrolListesi from '@/components/gorev/GorevKontrolListesi.vue'
 import { useGorevStore } from '@/stores/gorev'
 import { useAracStore } from '@/stores/arac'
+import { gorevYukle as gorevuAracaYukle } from '@/libs/mavlink/komutlar'
 
 const gorevStore = useGorevStore()
 const aracStore = useAracStore()
@@ -100,10 +101,44 @@ const yolOlusturModunu = () => {
   noktaEkleModu.value = !noktaEkleModu.value
 }
 
-const gorevYukle = () => {
-  gorevStore.gorevAraca = true
-  const bildirim = (window as any).__toygunBildirim
-  if (bildirim) bildirim('Görev araca yüklendi!', 'basari')
+const yuklemeIlerleme = ref('')
+
+const gorevYukle = async () => {
+  if (gorevStore.gorevYukleniyor) return
+  const bildirim = (m: string, t: string) => (window as any).__toygunBildirim?.(m, t)
+  const log = (m: string, t: string) => (window as any).__toygunTerminal?.(m, t)
+
+  if (aracStore.simuleAktif) {
+    bildirim('Simülasyon modunda görev araca yüklenemez', 'uyari')
+    return
+  }
+
+  gorevStore.gorevYukleniyor = true
+  gorevStore.gorevAraca = false
+  yuklemeIlerleme.value = ''
+  log(`Görev yükleniyor: ${gorevStore.noktalar.length} nokta`, 'sys')
+  try {
+    // ArduPilot öğe 0'ı ev noktası sayar — yer tutucu için bilinen ev / araç konumu kullanılır
+    const aracKonumu = aracStore.enlem !== 0 || aracStore.boylam !== 0
+      ? { enlem: aracStore.enlem, boylam: aracStore.boylam }
+      : undefined
+    const sonuc = await gorevuAracaYukle(
+      gorevStore.noktalar,
+      (gonderilen, toplam) => { yuklemeIlerleme.value = `${gonderilen}/${toplam}` },
+      { otopilot: aracStore.otopilot, evKonumu: gorevStore.evNoktasi ?? aracKonumu },
+    )
+    if (sonuc.basarili) {
+      gorevStore.gorevAraca = true
+      bildirim(sonuc.mesaj, 'basari')
+      log(sonuc.mesaj, 'ok')
+    } else {
+      bildirim(sonuc.mesaj, 'hata')
+      log(sonuc.mesaj, 'error')
+    }
+  } finally {
+    gorevStore.gorevYukleniyor = false
+    yuklemeIlerleme.value = ''
+  }
 }
 
 const dosyadanYukle = (e: Event) => {
@@ -164,8 +199,8 @@ const dosyadanYukle = (e: Event) => {
 .panel-giris {
   width: 100%;
   padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tg-hover-bg);
+  border: 1px solid var(--tg-input-border);
   border-radius: 6px;
   color: var(--tg-metin);
   font-size: 13px;
@@ -205,7 +240,7 @@ const dosyadanYukle = (e: Event) => {
   gap: 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--tg-subtle-bg);
 }
 
 .nokta-sira {

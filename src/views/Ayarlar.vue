@@ -81,12 +81,32 @@
       <v-divider class="my-4" style="border-color: var(--tg-divider)" />
 
       <div class="ayar-grup">
+        <h3 class="grup-baslik">Görünüm</h3>
+        <div class="tema-secici" role="radiogroup" aria-label="Tema">
+          <button
+            v-for="secenek in temaSecenekleri"
+            :key="secenek.deger"
+            class="tema-secenek"
+            :class="{ 'tema-secenek-aktif': temaStore.tema === secenek.deger }"
+            role="radio"
+            :aria-checked="temaStore.tema === secenek.deger"
+            @click="temaStore.tema = secenek.deger"
+          >
+            <v-icon size="16" class="mr-1">{{ secenek.ikon }}</v-icon>
+            {{ secenek.ad }}
+          </button>
+        </div>
+      </div>
+
+      <v-divider class="my-4" style="border-color: var(--tg-divider)" />
+
+      <div class="ayar-grup">
         <h3 class="grup-baslik">Hakkında</h3>
         <div class="hakkinda">
-          <img src="@/assets/toygun-logo.png" alt="Toygun" class="hakkinda-logo" />
+          <div class="hakkinda-logo" role="img" aria-label="Toygun logosu" />
           <p class="hakkinda-baslik">TOYGUN GCS</p>
           <p class="hakkinda-aciklama">PX4 sabit kanatlı araçlar için özelleştirilmiş yer kontrol istasyonu</p>
-          <p class="hakkinda-versiyon">Sürüm 1.0.0</p>
+          <p class="hakkinda-versiyon">Sürüm {{ uygulamaSurumu }}</p>
         </div>
       </div>
     </div>
@@ -96,6 +116,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useAracStore } from '@/stores/arac'
+import { useTemaStore, type TemaAdi } from '@/stores/tema'
 import { mavlinkBaglan, mavlinkKes } from '@/libs/mavlink/baglanti'
 import {
   rosbridgeBaglan,
@@ -104,6 +125,12 @@ import {
 } from '@/libs/ros2/rosbridge-baglanti'
 
 const aracStore = useAracStore()
+const temaStore = useTemaStore()
+const uygulamaSurumu = __UYGULAMA_SURUMU__
+const temaSecenekleri: { deger: TemaAdi; ad: string; ikon: string }[] = [
+  { deger: 'acik', ad: 'Açık', ikon: 'mdi-white-balance-sunny' },
+  { deger: 'koyu', ad: 'Koyu', ikon: 'mdi-weather-night' },
+]
 
 // localStorage anahtarları (BaglantiPaneli.vue ile paylaşılır)
 const WS_ADRES_KEY   = 'tg-ws-adres'
@@ -238,7 +265,39 @@ function ros2BaglantiToggle() {
   padding: 20px 0;
 }
 
-.hakkinda-logo { width: 64px; margin-bottom: 12px; filter: brightness(1.2); }
+.hakkinda-logo {
+  width: 120px;
+  height: 44px;
+  margin: 0 auto 12px;
+  background-color: var(--tg-logo-renk);
+  -webkit-mask: url('@/assets/toygun-logo-yatay.png') center / contain no-repeat;
+  mask: url('@/assets/toygun-logo-yatay.png') center / contain no-repeat;
+}
+
+.tema-secici { display: flex; gap: 8px; }
+
+.tema-secenek {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--tg-input-border);
+  background: var(--tg-input-bg);
+  color: var(--tg-metin-soluk);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tema-secenek:hover { background: var(--tg-hover-bg-2); color: var(--tg-metin); }
+
+.tema-secenek-aktif {
+  border-color: var(--tg-turuncu);
+  color: var(--tg-turuncu);
+  background: rgba(255, 128, 0, 0.1);
+}
 .hakkinda-baslik { font-size: 18px; font-weight: 700; color: var(--tg-turuncu); letter-spacing: 2px; }
 .hakkinda-aciklama { font-size: 12px; color: var(--tg-metin-soluk); margin-top: 6px; }
 .hakkinda-versiyon { font-size: 11px; color: var(--tg-metin-soluk); margin-top: 4px; }

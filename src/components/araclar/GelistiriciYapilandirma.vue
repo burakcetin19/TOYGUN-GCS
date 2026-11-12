@@ -28,7 +28,7 @@
       </div>
     </div>
 
-    <v-divider class="my-2" style="border-color: rgba(255,255,255,0.06)" />
+    <v-divider class="my-2" style="border-color: var(--tg-divider)" />
 
     <!-- Sistem Logları -->
     <div class="gp-loglar">
@@ -277,7 +277,7 @@ const tumunuSil = () => {
   flex: 1;
   appearance: none;
   height: 4px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--tg-hover-bg-2);
   border-radius: 2px;
   outline: none;
   max-width: 200px;
@@ -336,7 +336,7 @@ const tumunuSil = () => {
 .gp-tablo-container {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--tg-divider);
   border-radius: 6px;
 }
 
@@ -358,20 +358,20 @@ const tumunuSil = () => {
   font-size: 11px;
   font-weight: 600;
   color: var(--tg-metin-soluk);
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--tg-subtle-bg);
+  border-bottom: 1px solid var(--tg-divider);
   white-space: nowrap;
 }
 
 .gp-tablo td {
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--tg-divider);
   color: var(--tg-metin);
   white-space: nowrap;
 }
 
 .gp-tablo tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--tg-subtle-bg);
 }
 
 .gp-log-adi {
@@ -403,14 +403,14 @@ const tumunuSil = () => {
   justify-content: center;
   border: none;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tg-hover-bg);
   color: var(--tg-metin-soluk);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .gp-islem-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--tg-hover-bg-2);
   color: var(--tg-metin);
 }
 
@@ -436,8 +436,8 @@ const tumunuSil = () => {
 }
 
 .gp-select {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tg-hover-bg);
+  border: 1px solid var(--tg-input-border);
   border-radius: 4px;
   color: var(--tg-metin);
   padding: 2px 6px;
@@ -458,14 +458,14 @@ const tumunuSil = () => {
   justify-content: center;
   border: none;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tg-subtle-bg);
   color: var(--tg-metin-soluk);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .gp-nav-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--tg-hover-bg-2);
   color: var(--tg-metin);
 }
 

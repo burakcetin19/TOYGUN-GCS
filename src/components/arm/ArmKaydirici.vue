@@ -9,16 +9,16 @@
     </Transition>
 
     <!-- Disarm butonu (silahlanmış durum) -->
-    <div v-if="aracStore.armed" class="disarm-alan" @click="disarmEt">
+    <div v-if="aracStore.armed" class="disarm-alan" :class="{ 'disarm-onay': disarmOnayBekliyor }" @click="disarmEt">
       <v-icon size="14" color="#dc2626">mdi-shield-off</v-icon>
-      <span class="arm-durum-metin silahli">SİLAHLI</span>
-      <span class="disarm-ipucu">— kes</span>
+      <span class="arm-durum-metin silahli">{{ komutBekleniyor ? 'GÖNDERİLİYOR…' : 'SİLAHLI' }}</span>
+      <span class="disarm-ipucu">{{ disarmOnayBekliyor ? '— onay için tekrar tıkla' : '— kes' }}</span>
     </div>
 
     <!-- Slide-to-arm (silahlı değil) -->
     <div v-else class="arm-track" ref="trackRef">
       <!-- Arka plan etiketi -->
-      <span class="arm-label">Kaydır → ARM</span>
+      <span class="arm-label">{{ komutBekleniyor ? 'ARM gönderiliyor…' : 'Kaydır → ARM' }}</span>
 
       <!-- Sürüklenebilir thumb -->
       <div
@@ -40,6 +40,7 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue'
 import { useAracStore } from '@/stores/arac'
+import { armDisarmGonder, type ArmSonucu } from '@/libs/mavlink/komutlar'
 
 const aracStore = useAracStore()
 
@@ -59,15 +60,72 @@ const hataGoster = (mesajlar: string[]) => {
   hataZamanlayici = setTimeout(() => { hataMesaji.value = '' }, 4000)
 }
 
-const armDenemesi = () => {
+const komutBekleniyor = ref(false)
+const disarmOnayBekliyor = ref(false)
+let disarmOnayZamanlayici: ReturnType<typeof setTimeout> | null = null
+
+const log = (m: string, t: string) => (window as any).__toygunTerminal?.(m, t)
+const bildirim = (m: string, t: string) => (window as any).__toygunBildirim?.(m, t)
+
+const sonucuBildir = (sonuc: ArmSonucu) => {
+  if (sonuc.durum === 'kabul') {
+    log(sonuc.mesaj, 'ok')
+    return
+  }
+  if (sonuc.durum === 'yanitYok') {
+    // ACK gelmeyebilir (ör. mavlink2rest yolu) — asıl durum HEARTBEAT'ten okunur
+    log(sonuc.mesaj, 'warn')
+    bildirim(sonuc.mesaj, 'uyari')
+    return
+  }
+  log(sonuc.mesaj, 'error')
+  bildirim(sonuc.mesaj, 'hata')
+  hataGoster([sonuc.mesaj])
+}
+
+const armDenemesi = async () => {
+  if (komutBekleniyor.value) return
   const sonuc = aracStore.armEt()
   if (!sonuc.basarili) {
     hataGoster(sonuc.hatalar)
+    return
+  }
+  if (aracStore.simuleAktif) return // simülasyonda store yerel olarak ARM'landı
+
+  komutBekleniyor.value = true
+  log('ARM komutu gönderiliyor…', 'sys')
+  try {
+    sonucuBildir(await armDisarmGonder(true))
+  } finally {
+    komutBekleniyor.value = false
   }
 }
 
-const disarmEt = () => {
-  aracStore.disarmEt()
+const disarmEt = async () => {
+  if (komutBekleniyor.value) return
+
+  // İki aşamalı onay — uçuşta yanlışlıkla tıklamaya karşı
+  if (!disarmOnayBekliyor.value) {
+    disarmOnayBekliyor.value = true
+    if (disarmOnayZamanlayici) clearTimeout(disarmOnayZamanlayici)
+    disarmOnayZamanlayici = setTimeout(() => { disarmOnayBekliyor.value = false }, 3000)
+    return
+  }
+  disarmOnayBekliyor.value = false
+  if (disarmOnayZamanlayici) clearTimeout(disarmOnayZamanlayici)
+
+  if (aracStore.simuleAktif) {
+    aracStore.disarmEt()
+    return
+  }
+
+  komutBekleniyor.value = true
+  log('DISARM komutu gönderiliyor…', 'sys')
+  try {
+    sonucuBildir(await armDisarmGonder(false))
+  } finally {
+    komutBekleniyor.value = false
+  }
 }
 
 // Mouse sürükleme
@@ -127,6 +185,7 @@ onUnmounted(() => {
   window.removeEventListener('touchmove', surukleTouch)
   window.removeEventListener('touchend', suruklemeyiBitirTouch)
   if (hataZamanlayici) clearTimeout(hataZamanlayici)
+  if (disarmOnayZamanlayici) clearTimeout(disarmOnayZamanlayici)
 })
 </script>
 
@@ -192,6 +251,11 @@ onUnmounted(() => {
   font-weight: 700;
   letter-spacing: 1px;
   color: #dc2626;
+}
+
+.disarm-alan.disarm-onay {
+  background: rgba(220, 38, 38, 0.25);
+  border-color: #dc2626;
 }
 
 .disarm-ipucu {

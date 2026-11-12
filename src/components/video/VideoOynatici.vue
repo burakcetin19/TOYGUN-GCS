@@ -100,7 +100,7 @@
 
       <!-- Akış yok durumu -->
       <div v-else class="video-bos">
-        <v-icon size="56" color="rgba(255,255,255,0.15)">mdi-video-off-outline</v-icon>
+        <v-icon size="56" color="var(--tg-metin-cok-soluk)">mdi-video-off-outline</v-icon>
         <p>Video akışı bekleniyor</p>
         <p class="video-ipucu">Akış adresini girin veya kamera bağlayın</p>
       </div>
@@ -343,8 +343,8 @@ const akisiBaslat = async () => {
 .video-url-giris {
   width: 220px;
   padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: var(--tg-input-bg);
+  border: 1px solid var(--tg-input-border);
   border-radius: 4px;
   color: var(--tg-metin);
   font-size: 11px;

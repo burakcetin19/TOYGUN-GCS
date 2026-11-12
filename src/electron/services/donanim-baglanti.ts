@@ -7,6 +7,27 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import * as dgram from 'dgram'
 import * as net from 'net'
+import { createRequire } from 'module'
+import { MavlinkAyristirici, cerceveCoz, komutKodla } from '../../libs/mavlink/cerceve'
+
+// serialport native bir modüldür ve vite.config.ts'te external tutulur.
+// Asar içinden güvenilir yükleme için ESM import() yerine CJS require kullanılır.
+const yerelRequire = createRequire(__filename)
+let serialportModulu: any = null
+let serialportHatasi: string | null = null
+
+function serialportYukle(): any {
+  if (serialportModulu) return serialportModulu
+  try {
+    serialportModulu = yerelRequire('serialport')
+    serialportHatasi = null
+    return serialportModulu
+  } catch (e: any) {
+    if (serialportHatasi !== e.message) console.error('[Donanım] serialport yüklenemedi:', e.message)
+    serialportHatasi = e.message
+    throw e
+  }
+}
 
 // ── Port Bilgisi Arayüzü ───────────────────────────────────────────────────────
 export interface PortBilgisi {
@@ -92,7 +113,7 @@ async function portListeAlWMI(): Promise<PortBilgisi[]> {
 // ── Port Listesi Yardımcı Fonksiyonu ──────────────────────────────────────────
 async function portListeAl(): Promise<PortBilgisi[]> {
   try {
-    const { SerialPort } = await import('serialport')
+    const { SerialPort } = serialportYukle()
     const portlar = await SerialPort.list()
     return portlar.map((p: any) => {
       const vid = p.vendorId ?? ''
@@ -109,8 +130,8 @@ async function portListeAl(): Promise<PortBilgisi[]> {
       }
     })
   } catch {
-    console.warn('[Donanım] serialport yüklenemedi, WMI kullanılıyor')
-    return portListeAlWMI()
+    // serialport yüklenemediyse (yalnızca Windows'ta anlamlı) WMI ile listele
+    return process.platform === 'win32' ? portListeAlWMI() : []
   }
 }
 
@@ -121,7 +142,18 @@ let oncekiPortYollari: Set<string> = new Set()
 export function portIzleyiciBaslat(pencere: BrowserWindow): void {
   if (portIzleyiciInterval) return
 
+  let calisiyor = false
   const kontrol = async () => {
+    if (calisiyor) return // önceki tarama bitmeden yenisini başlatma
+    calisiyor = true
+    try {
+      await taraVeBildir()
+    } finally {
+      calisiyor = false
+    }
+  }
+
+  const taraVeBildir = async () => {
     const portlar = await portListeAl()
     const yeniYollar = new Set(portlar.map(p => p.yol))
     const degisti =
@@ -150,39 +182,6 @@ export function portIzleyiciDurdur(): void {
   }
 }
 
-// ── MAVLink Sabitleri ──────────────────────────────────────────────────────────
-const MAVLINK_V1_STX = 0xFE
-const MAVLINK_V2_STX = 0xFD
-const MAV_ARMED_BAYRAGI = 128
-
-function px4ModuCoz(customMode: number): string {
-  const anaMode = (customMode >> 16) & 0xFF
-  const altMode = (customMode >> 24) & 0xFF
-  const ALT: Record<number, string> = {
-    2: 'AUTO.TAKEOFF', 3: 'AUTO.LOITER', 4: 'AUTO.MISSION',
-    5: 'AUTO.RTL',     6: 'AUTO.LAND',   7: 'AUTO.RTGS',
-    8: 'AUTO.FOLLOW',  9: 'AUTO.PRECLAND',
-  }
-  const ANA: Record<number, string> = {
-    1: 'MANUAL', 2: 'ALTCTL', 3: 'POSCTL',
-    5: 'ACRO',   6: 'OFFBOARD', 7: 'STABILIZED',
-  }
-  if (anaMode === 4) return ALT[altMode] ?? 'AUTO'
-  if (anaMode !== 0) return ANA[anaMode] ?? `MOD_${anaMode}`
-  const ESKİ: Record<number, string> = {
-    0: 'MANUAL', 1: 'ALTCTL', 2: 'POSCTL', 3: 'AUTO.MISSION',
-    4: 'AUTO.LOITER', 5: 'AUTO.RTL', 6: 'ACRO', 8: 'STABILIZED',
-    9: 'OFFBOARD', 10: 'AUTO.TAKEOFF', 11: 'AUTO.LAND',
-    12: 'AUTO.FOLLOW', 14: 'AUTO.PRECLAND',
-  }
-  return ESKİ[customMode] ?? `MOD_${customMode}`
-}
-
-const GPS_FIX_TIPLERI: Record<number, string> = {
-  0: 'NO_GPS', 1: 'NO_FIX', 2: 'FIX_2D',
-  3: 'FIX_3D', 4: 'DGPS', 5: 'RTK_FLOAT', 6: 'RTK_FIXED',
-}
-
 // ── Aktif Bağlantı Referansları ────────────────────────────────────────────────
 let aktifSerialPort: any = null
 let aktifUdpSocket: dgram.Socket | null = null
@@ -190,223 +189,47 @@ let aktifTcpSocket: net.Socket | null = null
 let aktifPencere: BrowserWindow | null = null
 let aktifUdpHedef: { adres: string; port: number } | null = null  // gelen paketten öğrenilir
 
-// ── MAVLink Byte Akışı Ayrıştırıcı ────────────────────────────────────────────
-/**
- * MAVLink v1 ve v2 çerçevelerini ham byte akışından ayrıştırır.
- * Sadece kullanılan 6 mesaj tipini decode eder.
- */
-class MavlinkAyrıştırıcı {
-  private tampon = Buffer.alloc(0)
-  private onMesaj: (tip: string, veri: Record<string, any>) => void
-
-  constructor(onMesaj: (tip: string, veri: Record<string, any>) => void) {
-    this.onMesaj = onMesaj
+// ── MAVLink Ayrıştırıcı Fabrikası ─────────────────────────────────────────────
+/** Ortak (CRC doğrulamalı) ayrıştırıcıyı kurar; çözülen mesajları renderer'a iletir. */
+function ayristiriciOlustur(ekCb?: (tip: string) => void): { isle: (veri: Buffer) => void } {
+  const ayristirici = new MavlinkAyristirici((cerceve) => {
+    const mesaj = cerceveCoz(cerceve)
+    if (!mesaj) return
+    pencereGonder('mavlink-mesaj', mesaj)
+    ekCb?.(mesaj.tip)
+  })
+  return {
+    // Buffer bir Uint8Array alt sınıfıdır — doğrudan verilebilir
+    isle: (veri: Buffer) => ayristirici.ekle(veri),
   }
+}
 
-  isle(gelen: Buffer): void {
-    this.tampon = Buffer.concat([this.tampon, gelen])
-    // Tampon çok büyüdüyse baştaki eski veriyi at
-    if (this.tampon.length > 4096) {
-      this.tampon = this.tampon.slice(this.tampon.length - 2048)
-    }
-    this.cercevele()
-  }
+type YazmaSonucu = { basarili: boolean; hata?: string }
 
-  private cercevele(): void {
-    while (true) {
-      // Başlangıç baytına senkronize ol
-      let basIdx = -1
-      for (let i = 0; i < this.tampon.length; i++) {
-        if (this.tampon[i] === MAVLINK_V1_STX || this.tampon[i] === MAVLINK_V2_STX) {
-          basIdx = i
-          break
-        }
-      }
-      if (basIdx === -1) { this.tampon = Buffer.alloc(0); return }
-      if (basIdx > 0) this.tampon = this.tampon.slice(basIdx)
-      if (this.tampon.length < 2) return
-
-      const stx = this.tampon[0]
-      const govdeBoys = this.tampon[1]
-
-      if (stx === MAVLINK_V1_STX) {
-        // MAVLink v1: STX(1) + LEN(1) + SEQ(1) + SYSID(1) + COMPID(1) + MSGID(1) + PAYLOAD + CRC(2)
-        const toplam = 6 + govdeBoys + 2
-        if (this.tampon.length < toplam) return
-        const mesajId = this.tampon[5]
-        const govde = this.tampon.slice(6, 6 + govdeBoys)
-        this.tampon = this.tampon.slice(toplam)
-        this.mesajCoz(mesajId, govde)
+function mavlinkNativeYaz(bytes: Buffer): Promise<YazmaSonucu> {
+  return new Promise((coz) => {
+    const bitti = (err?: Error | null) => {
+      if (err) {
+        console.warn('[MAVLink] Yazma hatası:', err.message)
+        coz({ basarili: false, hata: err.message })
       } else {
-        // MAVLink v2: STX(1)+LEN(1)+INCOMPAT(1)+COMPAT(1)+SEQ(1)+SYSID(1)+COMPID(1)+MSGID(3)+PAYLOAD+CRC(2)[+SIG(13)]
-        if (this.tampon.length < 10) return
-        const uyumsuz = this.tampon[2]
-        const imzaBoyu = (uyumsuz & 0x01) ? 13 : 0
-        const toplam = 10 + govdeBoys + 2 + imzaBoyu
-        if (this.tampon.length < toplam) return
-        const mesajId = this.tampon[7] | (this.tampon[8] << 8) | (this.tampon[9] << 16)
-        const govde = this.tampon.slice(10, 10 + govdeBoys)
-        this.tampon = this.tampon.slice(toplam)
-        this.mesajCoz(mesajId, govde)
+        coz({ basarili: true })
       }
     }
-  }
-
-  private mesajCoz(mesajId: number, govde: Buffer): void {
-    try {
-      switch (mesajId) {
-        case 0:  this.heartbeatCoz(govde); break     // HEARTBEAT
-        case 1:  this.sysStatusCoz(govde); break     // SYS_STATUS
-        case 24: this.gpsRawCoz(govde); break        // GPS_RAW_INT
-        case 30: this.attitudeCoz(govde); break      // ATTITUDE
-        case 33: this.globalPositionCoz(govde); break // GLOBAL_POSITION_INT
-        case 74: this.vfrHudCoz(govde); break        // VFR_HUD
+    if (aktifSerialPort) {
+      aktifSerialPort.write(bytes, (err: Error | null | undefined) => bitti(err))
+    } else if (aktifUdpSocket) {
+      if (!aktifUdpHedef) {
+        coz({ basarili: false, hata: 'UDP hedefi bilinmiyor — araçtan henüz paket alınmadı' })
+        return
       }
-    } catch {
-      // Bozuk paket — sessizce atla
+      aktifUdpSocket.send(bytes, aktifUdpHedef.port, aktifUdpHedef.adres, (err) => bitti(err))
+    } else if (aktifTcpSocket) {
+      aktifTcpSocket.write(bytes, (err) => bitti(err))
+    } else {
+      coz({ basarili: false, hata: 'Aktif donanım bağlantısı yok' })
     }
-  }
-
-  // HEARTBEAT: custom_mode(u32), type(u8), autopilot(u8), base_mode(u8), system_status(u8), mavlink_version(u8)
-  private heartbeatCoz(g: Buffer): void {
-    if (g.length < 9) return
-    const customMode = g.readUInt32LE(0)
-    const baseMode = g[6]
-    this.onMesaj('HEARTBEAT', {
-      custom_mode: customMode,
-      base_mode: { bits: baseMode },
-      armed: (baseMode & MAV_ARMED_BAYRAGI) !== 0,
-      ucusModu: px4ModuCoz(customMode),
-    })
-  }
-
-  // VFR_HUD: airspeed(f), groundspeed(f), alt(f), climb(f), heading(i16), throttle(u16)
-  private vfrHudCoz(g: Buffer): void {
-    if (g.length < 20) return
-    this.onMesaj('VFR_HUD', {
-      airspeed: g.readFloatLE(0),
-      groundspeed: g.readFloatLE(4),
-      alt: g.readFloatLE(8),
-      heading: g.readInt16LE(16),
-    })
-  }
-
-  // SYS_STATUS: ...(12b)..., voltage_battery(u16@14), current_battery(i16@16), ..., battery_remaining(i8@30)
-  private sysStatusCoz(g: Buffer): void {
-    if (g.length < 31) return
-    this.onMesaj('SYS_STATUS', {
-      voltage_battery: g.readUInt16LE(14),   // mV
-      current_battery: g.readInt16LE(16),    // cA
-      battery_remaining: g.readInt8(30),     // %
-    })
-  }
-
-  // ATTITUDE: time_boot_ms(u32), roll(f@4), pitch(f@8), yaw(f@12), ...
-  private attitudeCoz(g: Buffer): void {
-    if (g.length < 16) return
-    this.onMesaj('ATTITUDE', {
-      roll: g.readFloatLE(4),    // rad
-      pitch: g.readFloatLE(8),   // rad
-      yaw: g.readFloatLE(12),    // rad
-    })
-  }
-
-  // GLOBAL_POSITION_INT: time_boot_ms(u32), lat(i32@4), lon(i32@8), alt(i32@12), relative_alt(i32@16), vx/vy/vz(i16), hdg(u16@26)
-  private globalPositionCoz(g: Buffer): void {
-    if (g.length < 28) return
-    this.onMesaj('GLOBAL_POSITION_INT', {
-      lat: g.readInt32LE(4),
-      lon: g.readInt32LE(8),
-      alt: g.readInt32LE(12),         // mm
-      relative_alt: g.readInt32LE(16), // mm
-      hdg: g.readUInt16LE(26),        // cdeg
-    })
-  }
-
-  // GPS_RAW_INT: time_usec(u64@0), lat(i32@8), lon(i32@12), alt(i32@16), eph(u16@20), ..., fix_type(u8@28), satellites_visible(u8@29)
-  private gpsRawCoz(g: Buffer): void {
-    if (g.length < 30) return
-    const fixSayisi = g[28]
-    this.onMesaj('GPS_RAW_INT', {
-      fix_type: { type: GPS_FIX_TIPLERI[fixSayisi] ?? 'NO_FIX' },
-      lat: g.readInt32LE(8),
-      lon: g.readInt32LE(12),
-      eph: g.readUInt16LE(20),        // cm
-      satellites_visible: g[29],
-    })
-  }
-}
-
-// ── MAVLink v1 Byte Encoder (main process, Node.js Buffer) ───────────────────
-
-let mavSeqGCS = 0
-
-function x25Crc(buf: Buffer): number {
-  let crc = 0xFFFF
-  for (const byte of buf) {
-    let tmp = (byte ^ (crc & 0xFF)) & 0xFF
-    tmp ^= (tmp << 4) & 0xFF
-    crc = ((crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)) & 0xFFFF
-  }
-  return crc
-}
-
-function mavV1Kare(msgId: number, crcExtra: number, payload: Buffer): Buffer {
-  const seq = mavSeqGCS++ & 0xFF
-  const header = Buffer.from([payload.length, seq, 255, 240, msgId])
-  const crcInput = Buffer.concat([header, payload, Buffer.from([crcExtra])])
-  const crc = x25Crc(crcInput)
-  const crcBuf = Buffer.from([crc & 0xFF, (crc >> 8) & 0xFF])
-  return Buffer.concat([Buffer.from([0xFE]), header, payload, crcBuf])
-}
-
-function commandLongBuf(
-  command: number,
-  p1 = 0, p2 = 0, p3 = 0, p4 = 0, p5 = 0, p6 = 0, p7 = 0,
-  tSys = 1, tComp = 1, conf = 0,
-): Buffer {
-  const p = Buffer.alloc(33)
-  p.writeFloatLE(p1, 0); p.writeFloatLE(p2, 4); p.writeFloatLE(p3, 8)
-  p.writeFloatLE(p4, 12); p.writeFloatLE(p5, 16); p.writeFloatLE(p6, 20); p.writeFloatLE(p7, 24)
-  p.writeUInt16LE(command, 28); p[30] = tSys; p[31] = tComp; p[32] = conf
-  return mavV1Kare(76, 152, p)
-}
-
-const KOMUT_NO: Record<string, number> = {
-  MAV_CMD_COMPONENT_ARM_DISARM: 400,
-  MAV_CMD_DO_SET_MODE: 176,
-  MAV_CMD_MISSION_START: 300,
-  MAV_CMD_DO_SET_HOME: 179,
-}
-
-function mavlinkKomutKodet(komut: Record<string, any>): Buffer | null {
-  const msg = komut.message ?? komut
-  if (msg.type !== 'COMMAND_LONG') return null
-  const cmdRaw = msg.command?.type ?? msg.command ?? 0
-  const cmd = typeof cmdRaw === 'number' ? cmdRaw : (KOMUT_NO[cmdRaw] ?? 0)
-  return commandLongBuf(
-    cmd,
-    msg.param1 ?? 0, msg.param2 ?? 0, msg.param3 ?? 0, msg.param4 ?? 0,
-    msg.param5 ?? 0, msg.param6 ?? 0, msg.param7 ?? 0,
-    msg.target_system ?? 1, msg.target_component ?? 1, msg.confirmation ?? 0,
-  )
-}
-
-function mavlinkNativeYaz(bytes: Buffer): void {
-  if (aktifSerialPort) {
-    aktifSerialPort.write(bytes, (err: any) => {
-      if (err) console.warn('[MAVLink] Seri yazma hatası:', err.message)
-      else console.log(`[MAVLink] ${bytes.length} byte seri porta yazıldı`)
-    })
-  } else if (aktifUdpSocket && aktifUdpHedef) {
-    aktifUdpSocket.send(bytes, aktifUdpHedef.port, aktifUdpHedef.adres, (err: any) => {
-      if (err) console.warn('[MAVLink] UDP yazma hatası:', err.message)
-    })
-  } else if (aktifTcpSocket) {
-    aktifTcpSocket.write(bytes, (err: any) => {
-      if (err) console.warn('[MAVLink] TCP yazma hatası:', err?.message)
-    })
-  }
+  })
 }
 
 // ── Yardımcı Fonksiyonlar ──────────────────────────────────────────────────────
@@ -452,15 +275,13 @@ export function donanımBaglantiKur(pencere: BrowserWindow): void {
 
       let SerialPort: any
       try {
-        SerialPort = (await import('serialport')).SerialPort
+        SerialPort = serialportYukle().SerialPort
       } catch (modülHata: any) {
         baglantiDurumuGonder('baglantiKesik')
         return { basarili: false, hata: modülHata.message, webSerialFallback: true }
       }
 
-      const ayrıştırıcı = new MavlinkAyrıştırıcı((tip, veri) => {
-        pencereGonder('mavlink-mesaj', { tip, veri })
-      })
+      const ayrıştırıcı = ayristiriciOlustur()
 
       aktifSerialPort = new SerialPort({ path: yol, baudRate: baud, autoOpen: false })
 
@@ -510,8 +331,7 @@ export function donanımBaglantiKur(pencere: BrowserWindow): void {
       baglantiDurumuGonder('baglaniliyor')
 
       let heartbeatAlindi = false
-      const ayrıştırıcı = new MavlinkAyrıştırıcı((tip, veri) => {
-        pencereGonder('mavlink-mesaj', { tip, veri })
+      const ayrıştırıcı = ayristiriciOlustur((tip) => {
         if (!heartbeatAlindi && tip === 'HEARTBEAT') {
           heartbeatAlindi = true
           baglantiDurumuGonder('baglandi')
@@ -565,9 +385,7 @@ export function donanımBaglantiKur(pencere: BrowserWindow): void {
       aktifBaglantiyiKes()
       baglantiDurumuGonder('baglaniliyor')
 
-      const ayrıştırıcı = new MavlinkAyrıştırıcı((tip, veri) => {
-        pencereGonder('mavlink-mesaj', { tip, veri })
-      })
+      const ayrıştırıcı = ayristiriciOlustur()
 
       aktifTcpSocket = new net.Socket()
       aktifTcpSocket.on('data', (veri) => ayrıştırıcı.isle(veri))
@@ -619,11 +437,12 @@ export function donanımBaglantiKur(pencere: BrowserWindow): void {
     // Native serial/UDP/TCP aktifse → MAVLink byte kodla ve yaz
     if (aktifSerialPort || aktifUdpSocket || aktifTcpSocket) {
       try {
-        const bytes = mavlinkKomutKodet(komut)
+        const bytes = komutKodla(komut)
         if (bytes) {
-          mavlinkNativeYaz(bytes)
-          return { basarili: true }
+          return await mavlinkNativeYaz(Buffer.from(bytes))
         }
+        console.warn('[MAVLink] Native bağlantıda desteklenmeyen mesaj:', komut?.message?.type)
+        return { basarili: false, hata: `Desteklenmeyen mesaj tipi: ${komut?.message?.type}` }
       } catch (e: any) {
         console.warn('[MAVLink] Komut kodlama hatası:', e.message)
       }

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { otonomModMu, type Otopilot, type AracSinifi } from '@/libs/mavlink/otopilot'
 
 export const useAracStore = defineStore('arac', () => {
   // ── Bağlantı ──
@@ -28,6 +29,10 @@ export const useAracStore = defineStore('arac', () => {
   const yaw           = ref(0)
   const armed         = ref(false)
   const ucusModu      = ref('—')
+  /** HEARTBEAT.autopilot'tan — mod tablosu ve görev numaralandırması buna göre seçilir */
+  const otopilot      = ref<Otopilot>('bilinmiyor')
+  /** HEARTBEAT.type'tan — ArduPilot mod tablosu araç sınıfına göre değişir */
+  const aracSinifi    = ref<AracSinifi>('diger')
 
   // ── Simülasyon ──
   const simuleAktif = ref(false)
@@ -39,6 +44,9 @@ export const useAracStore = defineStore('arac', () => {
   const baglantiProtokolu = ref<'websocket' | 'serial' | 'udp' | 'tcp'>('websocket')
 
   const aracCevrimici = computed(() => baglantiDurumu.value === 'baglandi')
+
+  /** Aktif mod otonom mu? (yarışma telemetrisi iha_otonom alanı) */
+  const otonomMu = computed(() => otonomModMu(otopilot.value, aracSinifi.value, ucusModu.value))
 
   const bataryaDurumRengi = computed(() => {
     if (bataryaYuzde.value < 0)  return 'var(--tg-metin-soluk)'
@@ -63,6 +71,7 @@ export const useAracStore = defineStore('arac', () => {
     heading.value = 0; enlem.value = 0; boylam.value = 0
     pitch.value = 0; roll.value = 0; yaw.value = 0
     armed.value = false; ucusModu.value = '—'
+    otopilot.value = 'bilinmiyor'; aracSinifi.value = 'diger'
   }
 
   // ── Bağlantı ──
@@ -105,6 +114,9 @@ export const useAracStore = defineStore('arac', () => {
     boylam.value = 32.8597 + 0.008 * Math.sin((simuleAci * Math.PI) / 180)
     armed.value = true
     ucusModu.value = 'AUTO'
+    // Simülasyon ArduPlane mod adlarını kullanır (AUTO, LOITER, GUIDED, FBWA)
+    otopilot.value = 'ardupilot'
+    aracSinifi.value = 'sabitKanat'
     gpsFixTipi.value = 3
     gpsSayisi.value = 14
     gpsHdop.value = 0.85
@@ -186,14 +198,20 @@ export const useAracStore = defineStore('arac', () => {
     return hatalar
   }
 
+  /**
+   * GCS tarafı ARM ön kontrolü. Gerçek araçta `armed` değişmez — ARM komutu
+   * komutlar.ts → armDisarmGonder() ile gönderilir, durum HEARTBEAT'ten gelir.
+   * Simülasyonda ise yerel olarak ARM'lar.
+   */
   const armEt = (): { basarili: boolean; hatalar: string[] } => {
     const hatalar = armHataKontrol()
     if (hatalar.length > 0) return { basarili: false, hatalar }
-    armed.value = true
+    if (simuleAktif.value) armed.value = true
     return { basarili: true, hatalar: [] }
   }
 
-  const disarmEt = () => { armed.value = false }
+  /** Yalnızca simülasyonda yerel DISARM — gerçek araçta armDisarmGonder(false) kullanılır */
+  const disarmEt = () => { if (simuleAktif.value) armed.value = false }
 
   return {
     baglantiDurumu, baglantiHataMesaji, sonMesajZamani, baglantiTipi, bantGenisligi, baglantiProtokolu,
@@ -203,7 +221,7 @@ export const useAracStore = defineStore('arac', () => {
     gpsFixTipi, gpsSayisi, gpsHdop,
     heading, enlem, boylam,
     pitch, roll, yaw,
-    armed, ucusModu,
+    armed, ucusModu, otopilot, aracSinifi, otonomMu,
     simuleAktif, simuleBaslat, simuleDurdur,
     aracCevrimici, bataryaDurumRengi, gpsFixMetni,
     telemetriSifirla, armEt, disarmEt, armHataKontrol,

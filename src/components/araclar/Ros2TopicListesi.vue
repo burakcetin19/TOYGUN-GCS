@@ -448,7 +448,7 @@ const canliDeger = (topicAd: string, alanAd: string): string => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tg-subtle-bg);
 }
 
 /* Durum şeridi */
@@ -670,7 +670,7 @@ const canliDeger = (topicAd: string, alanAd: string): string => {
   display: grid;
   grid-template-columns: 2fr 1fr 1.5fr;
   padding: 4px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid var(--tg-divider);
 }
 
 .rt-alan-satir:last-child {

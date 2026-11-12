@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════
    Toygun GCS — Küresel Stiller
-   Renk Paleti: #FF8000 (turuncu), #0ea5e9 (cyan), krem-beyaz tema
+   Renk Paleti: #FF8000 (turuncu), #0ea5e9 (cyan)
+   Temalar: açık (krem-beyaz, varsayılan) · koyu — <html data-tema="koyu">
+   Tema store'u: src/stores/tema.ts. Yeni renk eklerken iki temaya da tanımlayın.
    ═══════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -39,12 +41,67 @@
   --tg-metin-soluk:     rgba(42, 28, 8, 0.58);
   --tg-metin-cok-soluk: rgba(42, 28, 8, 0.33);
 
+  /* ── Logo / Harita kontrolleri / Kaydırma çubuğu ── */
+  --tg-logo-renk:       #2a1c08;
+  --tg-harita-kontrol-bg:  rgba(255, 251, 242, 0.95);
+  --tg-harita-kontrol-bg-2: rgba(255, 251, 242, 1);
+  --tg-harita-atif-bg:  rgba(255, 251, 242, 0.75);
+  --tg-scrollbar:       rgba(0, 0, 0, 0.18);
+  --tg-scrollbar-hover: rgba(0, 0, 0, 0.28);
+
+  color-scheme: light;
+
   /* ── Boyutlar ── */
   --tg-ust-bar-yukseklik: 48px;
   --tg-alt-bar-yukseklik: 36px;
   --tg-kenar-bosluk:      12px;
   --tg-yuvarlatma:        10px;
 }
+
+/* ═══ Koyu Tema ═══ */
+:root[data-tema="koyu"] {
+  --tg-cyan:        #38bdf8;
+  --tg-arka-plan:   #0e1014;
+  --tg-arka-plan-2: #161a21;
+  --tg-basari:      #22c55e;
+  --tg-uyari:       #f59e0b;
+  --tg-tehlike:     #ef4444;
+
+  --tg-cam-bg:       rgba(22, 25, 32, 0.88);
+  --tg-cam-border:   rgba(255, 255, 255, 0.08);
+  --tg-panel-bg:     rgba(20, 23, 30, 0.96);
+  --tg-panel-border: rgba(255, 255, 255, 0.09);
+
+  --tg-hover-bg:     rgba(255, 255, 255, 0.05);
+  --tg-hover-bg-2:   rgba(255, 255, 255, 0.09);
+  --tg-input-bg:     rgba(255, 255, 255, 0.06);
+  --tg-input-border: rgba(255, 255, 255, 0.15);
+  --tg-divider:      rgba(255, 255, 255, 0.08);
+  --tg-badge-bg:     rgba(255, 255, 255, 0.07);
+  --tg-subtle-bg:    rgba(255, 255, 255, 0.03);
+  --tg-select-bg:    #1c2028;
+
+  --tg-metin:           #ede7db;
+  --tg-metin-soluk:     rgba(237, 231, 219, 0.62);
+  --tg-metin-cok-soluk: rgba(237, 231, 219, 0.36);
+
+  --tg-logo-renk:       #f4f0e8;
+  --tg-harita-kontrol-bg:  rgba(22, 25, 32, 0.92);
+  --tg-harita-kontrol-bg-2: rgba(32, 36, 45, 0.98);
+  --tg-harita-atif-bg:  rgba(14, 16, 20, 0.7);
+  --tg-scrollbar:       rgba(255, 255, 255, 0.16);
+  --tg-scrollbar-hover: rgba(255, 255, 255, 0.28);
+
+  color-scheme: dark;
+}
+
+/* Tema geçişinde yumuşak renk değişimi (yalnızca geçiş anında, bkz. tema.ts) */
+html.tema-gecisi, html.tema-gecisi * {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease !important;
+}
+
+/* Vuetify kök arka planı CSS temasını örtmesin */
+.v-application { background: transparent !important; color: var(--tg-metin) !important; }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -117,26 +174,26 @@ html, body {
 /* ═══ Scrollbar ═══ */
 ::-webkit-scrollbar            { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track      { background: transparent; }
-::-webkit-scrollbar-thumb      { background: rgba(0,0,0,0.18); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover{ background: rgba(0,0,0,0.28); }
+::-webkit-scrollbar-thumb      { background: var(--tg-scrollbar); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover{ background: var(--tg-scrollbar-hover); }
 
 /* ═══ Geçiş Animasyonu ═══ */
 .sayfa-gecis-enter-active, .sayfa-gecis-leave-active { transition: opacity 0.2s ease; }
 .sayfa-gecis-enter-from, .sayfa-gecis-leave-to       { opacity: 0; }
 
-/* ═══ Leaflet Açık Tema ═══ */
+/* ═══ Leaflet Kontrolleri (temaya duyarlı) ═══ */
 .leaflet-container { background: #0d1117 !important; }
 
 .leaflet-control-zoom a {
-  background: rgba(255, 251, 242, 0.95) !important;
-  color: #2a1c08 !important;
-  border-color: rgba(0,0,0,0.12) !important;
+  background: var(--tg-harita-kontrol-bg) !important;
+  color: var(--tg-metin) !important;
+  border-color: var(--tg-input-border) !important;
 }
-.leaflet-control-zoom a:hover { background: rgba(255, 251, 242, 1) !important; }
+.leaflet-control-zoom a:hover { background: var(--tg-harita-kontrol-bg-2) !important; }
 
 .leaflet-control-attribution {
-  background: rgba(255, 251, 242, 0.75) !important;
-  color: rgba(42, 28, 8, 0.5) !important;
+  background: var(--tg-harita-atif-bg) !important;
+  color: var(--tg-metin-soluk) !important;
   font-size: 10px !important;
 }
 .leaflet-control-attribution a { color: var(--tg-turuncu) !important; }
